@@ -13,9 +13,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -42,18 +42,37 @@ def normalize_cell(value: Any) -> str:
 
 
 def _format_http_error_response(code: int, body: bytes) -> str:
+    msg: str
     try:
         data = json.loads(body.decode("utf-8"))
         if isinstance(data, dict):
             err = str(data.get("error") or "").strip()
-            msg = str(data.get("message") or data.get("description") or "").strip()
-            parts = [p for p in (err, msg) if p]
+            m = str(data.get("message") or data.get("description") or "").strip()
+            parts = [p for p in (err, m) if p]
             if parts:
-                return f"Yandex Disk API HTTP {code}: {' — '.join(parts)}"
+                msg = f"Yandex Disk API HTTP {code}: {' — '.join(parts)}"
+            else:
+                compact = json.dumps(data, ensure_ascii=False)[:400]
+                msg = f"Yandex Disk API HTTP {code}: {compact}"
+        else:
+            raise ValueError("not a dict")
     except Exception:
-        pass
-    reason = "too many requests (rate limited)" if code == 429 else "request failed"
-    return f"Yandex Disk API HTTP {code}: {reason}"
+        snippet = body.decode("utf-8", errors="replace").strip().replace("\n", " ")[:500]
+        if code == 429:
+            tail = "too many requests (rate limited)"
+        elif code == 403:
+            tail = "forbidden"
+        else:
+            tail = "request failed"
+        msg = f"Yandex Disk API HTTP {code}: {tail}" + (f" — {snippet}" if snippet else "")
+
+    if code == 403:
+        msg += (
+            " | Проверьте пароль (TABLE_YANDEX_PUBLIC_PASSWORD), путь внутри папки "
+            "(TABLE_YANDEX_PUBLIC_PATH), что ссылка живая; при «без скачивания» у публичной ссылки "
+            "перейдите на TABLE_SOURCE_TYPE=yandex_disk_xlsx и YANDEX_DISK_TOKEN + TABLE_DISK_PATH."
+        )
+    return msg
 
 
 def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
@@ -133,7 +152,11 @@ class TableClient:
         raise ValueError(f"Unsupported TABLE_SOURCE_TYPE: {self.source_type}")
 
     def _request_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
-        headers = {"User-Agent": "Mozilla/5.0 accounting-max-bot"}
+        headers = {
+            "User-Agent": config.HTTP_USER_AGENT,
+            "Accept": "*/*",
+            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        }
         if extra:
             headers.update(extra)
         return headers
@@ -190,7 +213,11 @@ class TableClient:
         download_url = normalize_cell(payload.get("href", ""))
         if not download_url:
             raise ValueError("Yandex public resource download URL is missing")
-        return self._download_bytes(download_url)
+        cdn_headers: dict[str, str] = {}
+        pk = public_key.strip()
+        if pk.startswith("http://") or pk.startswith("https://"):
+            cdn_headers["Referer"] = pk
+        return self._download_bytes(download_url, cdn_headers if cdn_headers else None)
 
     def _download_yandex_disk_oauth_bytes(self) -> bytes:
         token = config.YANDEX_DISK_TOKEN.strip()

@@ -8,7 +8,13 @@ from unittest.mock import patch
 
 import config
 import table_client
-from table_client import TableClient
+from table_client import TableClient, _format_http_error_response
+
+
+def test_format_http_error_403_includes_russian_hint():
+    msg = _format_http_error_response(403, b"{}")
+    assert "403" in msg
+    assert "Проверьте" in msg
 
 
 def test_download_bytes_retries_on_429(monkeypatch):
@@ -95,7 +101,10 @@ def test_yandex_public_xlsx_resolves_public_link():
         "https://cloud-api.yandex.net/v1/disk/public/resources/download?"
         "public_key=https%3A%2F%2Fdisk.yandex.ru%2Fi%2Fpublic-key"
     ]
-    download.assert_called_once_with("https://download.example.com/table.xlsx")
+    download.assert_called_once_with(
+        "https://download.example.com/table.xlsx",
+        {"Referer": "https://disk.yandex.ru/i/public-key"},
+    )
 
 
 def test_yandex_public_xlsx_includes_password_and_inner_path():
@@ -114,9 +123,13 @@ def test_yandex_public_xlsx_includes_password_and_inner_path():
     with patch.object(config, "TABLE_YANDEX_PUBLIC_PATH", "/book.xlsx"):
         with patch.object(config, "TABLE_YANDEX_PUBLIC_PASSWORD", "4268"):
             with patch.object(client, "_fetch_json", side_effect=fake_fetch_json):
-                with patch.object(client, "_download_bytes", return_value=b"x"):
+                with patch.object(client, "_download_bytes", return_value=b"x") as download:
                     client._download_yandex_public_bytes(client.source)
 
+    download.assert_called_once_with(
+        "https://download.example.com/table.xlsx",
+        {"Referer": "https://disk.yandex.ru/i/public-key"},
+    )
     assert api_calls == [
         "https://cloud-api.yandex.net/v1/disk/public/resources/download?"
         "public_key=https%3A%2F%2Fdisk.yandex.ru%2Fi%2Fpublic-key"

@@ -24,6 +24,13 @@ MAX_CHAT_ID: int = int(os.getenv("MAX_CHAT_ID", "0") or "0")
 MAX_SSL_VERIFY: bool = _as_bool(os.getenv("MAX_SSL_VERIFY", "true"), default=True)
 SEND_MODE: str = os.getenv("SEND_MODE", "max").strip().lower()
 
+# Browser-like UA helps Yandex file CDN (downloader.*) accept GET after API returns href; override if needed.
+_DEFAULT_HTTP_USER_AGENT: str = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+HTTP_USER_AGENT: str = (os.getenv("HTTP_USER_AGENT", "") or _DEFAULT_HTTP_USER_AGENT).strip()
+
 POLL_INTERVAL_SECONDS: int = int(os.getenv("POLL_INTERVAL_SECONDS", "15"))
 RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "2"))
 RETRY_DELAY_SECONDS: int = int(os.getenv("RETRY_DELAY_SECONDS", "2"))
