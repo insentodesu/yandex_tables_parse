@@ -76,6 +76,15 @@ def _format_http_error_response(code: int, body: bytes) -> str:
     return msg
 
 
+def _merge_url_query(url: str, updates: dict[str, str]) -> str:
+    parsed = urllib.parse.urlparse(url)
+    pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    merged = dict(pairs)
+    merged.update(updates)
+    new_query = urllib.parse.urlencode(merged)
+    return urllib.parse.urlunparse(parsed._replace(query=new_query))
+
+
 def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
     if exc.headers is None:
         return None
@@ -195,22 +204,51 @@ class TableClient:
                     continue
                 raise RuntimeError(_format_http_error_response(exc.code, body)) from exc
 
-    def _yandex_public_download_params(self, public_key: str) -> dict[str, str]:
-        params: dict[str, str] = {"public_key": public_key}
+    def _yandex_public_download_params_variants(self, public_key: str) -> list[dict[str, str]]:
+        base: dict[str, str] = {"public_key": public_key}
         inner_path = config.TABLE_YANDEX_PUBLIC_PATH.strip()
         if inner_path:
-            params["path"] = inner_path
+            base["path"] = inner_path
         password = config.TABLE_YANDEX_PUBLIC_PASSWORD.strip()
-        if password:
-            params["password"] = password
-        return params
+        if not password:
+            return [base]
+        fixed_key = config.TABLE_YANDEX_PUBLIC_PASSWORD_PARAM.strip()
+        if fixed_key:
+            merged = dict(base)
+            merged[fixed_key] = password
+            return [merged]
+        variants: list[dict[str, str]] = []
+        for key in ("password", "pass", "pwd", "link_password"):
+            merged = dict(base)
+            merged[key] = password
+            variants.append(merged)
+        return variants
 
     def _download_yandex_public_bytes(self, public_key: str) -> bytes:
-        api_url = (
-            "https://cloud-api.yandex.net/v1/disk/public/resources/download?"
-            + urllib.parse.urlencode(self._yandex_public_download_params(public_key))
-        )
-        payload = self._fetch_json(api_url)
+        variants = self._yandex_public_download_params_variants(public_key)
+        payload: dict[str, Any] | None = None
+        last_api_err: BaseException | None = None
+        for params in variants:
+            api_url = (
+                "https://cloud-api.yandex.net/v1/disk/public/resources/download?"
+                + urllib.parse.urlencode(params)
+            )
+            try:
+                payload = self._fetch_json(api_url)
+                break
+            except RuntimeError as exc:
+                last_api_err = exc
+                text = str(exc)
+                if "403" not in text and "401" not in text:
+                    raise
+                logger.warning(
+                    "Публичный API отклонил запрос (возможен неверный ключ пароля в query); пробуем следующий вариант"
+                )
+        if payload is None:
+            if last_api_err is not None:
+                raise last_api_err
+            raise RuntimeError("Yandex public download: no API response")
+
         download_url = normalize_cell(payload.get("href", ""))
         if not download_url:
             raise ValueError("Yandex public resource download URL is missing")
@@ -218,7 +256,23 @@ class TableClient:
         pk = public_key.strip()
         if pk.startswith("http://") or pk.startswith("https://"):
             cdn_headers["Referer"] = pk
-        return self._download_bytes(download_url, cdn_headers if cdn_headers else None)
+        hdr = cdn_headers if cdn_headers else None
+        pwd = config.TABLE_YANDEX_PUBLIC_PASSWORD.strip()
+
+        try:
+            return self._download_bytes(download_url, hdr)
+        except RuntimeError as exc:
+            if not pwd or "403" not in str(exc):
+                raise
+            logger.warning("CDN вернул 403; пробуем добавить пароль в query ссылки скачивания")
+            for qkey in ("password", "pass", "key", "code"):
+                try:
+                    merged_url = _merge_url_query(download_url, {qkey: pwd})
+                    return self._download_bytes(merged_url, hdr)
+                except RuntimeError as exc2:
+                    if "403" not in str(exc2):
+                        raise
+            raise exc
 
     def _download_yandex_disk_oauth_bytes(self) -> bytes:
         token = config.YANDEX_DISK_TOKEN.strip()

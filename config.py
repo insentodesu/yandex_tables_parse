@@ -57,6 +57,8 @@ TABLE_COMMAND_COLUMN: str = os.getenv("TABLE_COMMAND_COLUMN", "Бухгалте�
 # Public Yandex Disk link (yandex_public_*): optional path inside a published folder and link password.
 TABLE_YANDEX_PUBLIC_PATH: str = os.getenv("TABLE_YANDEX_PUBLIC_PATH", "").strip()
 TABLE_YANDEX_PUBLIC_PASSWORD: str = os.getenv("TABLE_YANDEX_PUBLIC_PASSWORD", "").strip()
+# If set, only this query key is used for the link password (e.g. pass). Empty = try several undocumented keys.
+TABLE_YANDEX_PUBLIC_PASSWORD_PARAM: str = os.getenv("TABLE_YANDEX_PUBLIC_PASSWORD_PARAM", "").strip()
 
 # OAuth access to your own Disk file (yandex_disk_*), when public API is blocked (e.g. download disabled).
 YANDEX_DISK_TOKEN: str = os.getenv("YANDEX_DISK_TOKEN", "").strip()

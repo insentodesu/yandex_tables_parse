@@ -45,7 +45,8 @@ python prepare_yandex_template.py
 5. Decide how the bot will read the table after migration:
    - `TABLE_SOURCE_TYPE=yandex_public_xlsx` for a public Yandex Table link like `https://disk.yandex.ru/i/...`
    - `TABLE_SOURCE_TYPE=yandex_public_csv` for a public Yandex CSV resource
-   - For a **password-protected** public link, set `TABLE_YANDEX_PUBLIC_PASSWORD` (and `TABLE_YANDEX_PUBLIC_PATH` if the link points to a folder and the file sits at a path inside it, e.g. `/book.xlsx`).
+   - For a **password-protected** public link, set `TABLE_YANDEX_PUBLIC_PASSWORD` (and `TABLE_YANDEX_PUBLIC_PATH` if the link points to a folder and the file sits at a path inside it, e.g. `/book.xlsx`). The Disk REST docs do not name the password query key; the bot tries several (`password`, `pass`, …) on the public API and on the CDN URL. Override with `TABLE_YANDEX_PUBLIC_PASSWORD_PARAM` if you know the right key.
+   - **Without OAuth:** if the share has **download disabled**, the public flow may still fail (403) — then either allow downloads on the link (password can stay), use **`xlsx_file`** / **`csv_file`** with a path to a copy synced to the server (e.g. Desktop app), or use OAuth (`yandex_disk_*`).
    - If the owner **disabled downloading** on the public link, the public API may stop working; use `TABLE_SOURCE_TYPE=yandex_disk_xlsx` or `yandex_disk_csv` with `YANDEX_DISK_TOKEN` and `TABLE_DISK_PATH` (path on your Disk, e.g. `disk:/folder/file.xlsx`). The bot requests a download URL over OAuth and then loads the file using the same token, as required by the Disk API.
    - `TABLE_SOURCE_TYPE=csv_url` for a published CSV export URL
    - `TABLE_SOURCE_TYPE=xlsx_url` for a published XLSX export URL

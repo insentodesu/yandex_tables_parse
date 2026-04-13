@@ -11,6 +11,37 @@ import table_client
 from table_client import TableClient, _format_http_error_response
 
 
+def test_public_password_param_variants_default():
+    client = TableClient()
+    with patch.object(config, "TABLE_YANDEX_PUBLIC_PASSWORD", "secret"):
+        with patch.object(config, "TABLE_YANDEX_PUBLIC_PATH", ""):
+            with patch.object(config, "TABLE_YANDEX_PUBLIC_PASSWORD_PARAM", ""):
+                variants = client._yandex_public_download_params_variants("https://disk.yandex.ru/i/k")
+    assert len(variants) == 4
+    keys_used = []
+    for v in variants:
+        assert v["public_key"] == "https://disk.yandex.ru/i/k"
+        for k in ("password", "pass", "pwd", "link_password"):
+            if k in v:
+                keys_used.append(k)
+                assert v[k] == "secret"
+                break
+    assert keys_used == ["password", "pass", "pwd", "link_password"]
+
+
+def test_public_password_param_fixed_key():
+    client = TableClient()
+    with patch.object(config, "TABLE_YANDEX_PUBLIC_PASSWORD", "x"):
+        with patch.object(config, "TABLE_YANDEX_PUBLIC_PASSWORD_PARAM", "mypasskey"):
+            variants = client._yandex_public_download_params_variants("https://a")
+    assert variants == [{"public_key": "https://a", "mypasskey": "x"}]
+
+
+def test_merge_url_query():
+    u = table_client._merge_url_query("https://h/d?a=b", {"p": "1"})
+    assert "a=b" in u and "p=1" in u
+
+
 def test_format_http_error_403_includes_russian_hint():
     msg = _format_http_error_response(403, b"{}")
     assert "403" in msg
