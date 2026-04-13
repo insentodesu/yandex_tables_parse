@@ -77,3 +77,4 @@ Deployment examples are in `deploy/run-accounting-max.sh` and `deploy/accounting
 - The bot does not clear the command cell after sending.
 - Deduplication is based on a hash of the command and row payload.
 - If row content changes, the hash changes too and the bot can resend the notification.
+- Yandex Disk may return **HTTP 429** if the table is polled too often (each cycle does several requests). The client retries with backoff and honors `Retry-After`. Raise `POLL_INTERVAL_SECONDS` (for example 60–120) if limits persist. After a failed cycle with 429, the scheduler sleeps an extra `RATE_LIMIT_COOLDOWN_SECONDS` (default 90; set to `0` to disable).

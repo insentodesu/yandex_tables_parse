@@ -28,6 +28,15 @@ POLL_INTERVAL_SECONDS: int = int(os.getenv("POLL_INTERVAL_SECONDS", "15"))
 RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "2"))
 RETRY_DELAY_SECONDS: int = int(os.getenv("RETRY_DELAY_SECONDS", "2"))
 
+# Backoff for TABLE_SOURCE HTTP fetches (Yandex Disk often returns 429 when polled too often).
+TABLE_FETCH_MAX_RETRIES: int = max(1, int(os.getenv("TABLE_FETCH_MAX_RETRIES", "6")))
+TABLE_FETCH_RETRY_BASE_SECONDS: float = float(os.getenv("TABLE_FETCH_RETRY_BASE_SECONDS", "2") or "2")
+TABLE_FETCH_RETRY_MAX_SLEEP_SECONDS: float = float(
+    os.getenv("TABLE_FETCH_RETRY_MAX_SLEEP_SECONDS", "120") or "120"
+)
+# Extra sleep after a polling cycle if the table fetch failed with HTTP 429 (0 disables).
+RATE_LIMIT_COOLDOWN_SECONDS: int = int(os.getenv("RATE_LIMIT_COOLDOWN_SECONDS", "90") or "0")
+
 DATABASE_PATH: str = os.getenv(
     "DATABASE_PATH",
     str(BASE_DIR / "data" / "accounting_max_bot.db"),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import urllib.error
 
 from aiohttp import TCPConnector
 from maxapi import Bot
@@ -19,6 +20,21 @@ from table_client import TableClient
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+
+def _is_yandex_http_429(exc: BaseException) -> bool:
+    cur: BaseException | None = exc
+    for _ in range(8):
+        if cur is None:
+            break
+        if isinstance(cur, urllib.error.HTTPError) and cur.code == 429:
+            return True
+        if isinstance(cur, RuntimeError):
+            text = str(cur)
+            if "HTTP 429" in text or " 429:" in text:
+                return True
+        cur = cur.__cause__
+    return False
 
 
 def create_bot() -> Bot:
@@ -180,7 +196,13 @@ async def run_scheduler_loop() -> None:
             sent_count = await process_pending_rows(bot, client)
             if sent_count:
                 logger.info("За цикл отправлено %s уведомлений", sent_count)
-        except Exception:
+        except Exception as exc:
             logger.exception("Ошибка в polling-цикле")
+            if config.RATE_LIMIT_COOLDOWN_SECONDS > 0 and _is_yandex_http_429(exc):
+                logger.warning(
+                    "Дополнительная пауза %s с после HTTP 429 (лимит Яндекс.Диска)",
+                    config.RATE_LIMIT_COOLDOWN_SECONDS,
+                )
+                await asyncio.sleep(config.RATE_LIMIT_COOLDOWN_SECONDS)
 
         await asyncio.sleep(config.POLL_INTERVAL_SECONDS)

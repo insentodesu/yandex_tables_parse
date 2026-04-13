@@ -6,10 +6,15 @@ import asyncio
 import csv
 import io
 import json
+import logging
+import random
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,6 +23,10 @@ from openpyxl import load_workbook
 from python_calamine import load_workbook as load_calamine_workbook
 
 import config
+
+logger = logging.getLogger(__name__)
+
+_RETRIABLE_HTTP_CODES = frozenset({429, 502, 503})
 
 
 def normalize_header(value: Any) -> str:
@@ -32,20 +41,39 @@ def normalize_cell(value: Any) -> str:
     return " ".join(text.split()).strip()
 
 
-def _format_yandex_http_error(exc: urllib.error.HTTPError) -> str:
+def _format_http_error_response(code: int, body: bytes) -> str:
     try:
-        raw = exc.read().decode("utf-8", errors="replace")
-        data = json.loads(raw)
+        data = json.loads(body.decode("utf-8"))
         if isinstance(data, dict):
             err = str(data.get("error") or "").strip()
             msg = str(data.get("message") or data.get("description") or "").strip()
             parts = [p for p in (err, msg) if p]
             if parts:
-                return f"Yandex Disk API HTTP {exc.code}: {' — '.join(parts)}"
+                return f"Yandex Disk API HTTP {code}: {' — '.join(parts)}"
     except Exception:
         pass
-    reason = exc.reason if isinstance(exc.reason, str) else ""
-    return f"Yandex Disk API HTTP {exc.code}: {reason or 'request failed'}"
+    reason = "too many requests (rate limited)" if code == 429 else "request failed"
+    return f"Yandex Disk API HTTP {code}: {reason}"
+
+
+def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
+    if exc.headers is None:
+        return None
+    raw = exc.headers.get("Retry-After")
+    if raw is None or not str(raw).strip():
+        return None
+    raw = str(raw).strip()
+    try:
+        return float(raw)
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(raw)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+    except Exception:
+        return None
 
 
 @dataclass(slots=True)
@@ -117,11 +145,31 @@ class TableClient:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
 
-        try:
-            with urllib.request.urlopen(request, timeout=30, context=context) as response:
-                return response.read()
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(_format_yandex_http_error(exc)) from exc
+        max_attempts = config.TABLE_FETCH_MAX_RETRIES
+        base = config.TABLE_FETCH_RETRY_BASE_SECONDS
+        cap = config.TABLE_FETCH_RETRY_MAX_SLEEP_SECONDS
+
+        for attempt in range(max_attempts):
+            try:
+                with urllib.request.urlopen(request, timeout=30, context=context) as response:
+                    return response.read()
+            except urllib.error.HTTPError as exc:
+                body = exc.read()
+                if exc.code in _RETRIABLE_HTTP_CODES and attempt < max_attempts - 1:
+                    hint = _retry_after_seconds(exc)
+                    if hint is None:
+                        hint = base * (2**attempt) + random.random()
+                    wait = max(1.0, min(hint, cap))
+                    logger.warning(
+                        "HTTP %s при загрузке таблицы, повтор через %.1f с (попытка %s/%s)",
+                        exc.code,
+                        wait,
+                        attempt + 1,
+                        max_attempts,
+                    )
+                    time.sleep(wait)
+                    continue
+                raise RuntimeError(_format_http_error_response(exc.code, body)) from exc
 
     def _yandex_public_download_params(self, public_key: str) -> dict[str, str]:
         params: dict[str, str] = {"public_key": public_key}

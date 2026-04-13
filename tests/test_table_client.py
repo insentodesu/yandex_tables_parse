@@ -1,10 +1,49 @@
 """Tests for spreadsheet readers."""
 
 import asyncio
+import urllib.error
+from email.message import Message
+from io import BytesIO
 from unittest.mock import patch
 
 import config
+import table_client
 from table_client import TableClient
+
+
+def test_download_bytes_retries_on_429(monkeypatch):
+    calls = {"n": 0}
+
+    class OkResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            return b"ok-body"
+
+    def fake_urlopen(req, timeout=None, context=None):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            msg = Message()
+            msg["Retry-After"] = "0"
+            raise urllib.error.HTTPError(
+                "http://example.invalid",
+                429,
+                "Too Many Requests",
+                msg,
+                BytesIO(b'{"error":"too_many_requests"}'),
+            )
+        return OkResponse()
+
+    monkeypatch.setattr(table_client.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(table_client.time, "sleep", lambda _s: None)
+
+    client = TableClient()
+    assert client._download_bytes("http://example.invalid") == b"ok-body"
+    assert calls["n"] == 3
 
 
 def test_csv_file_loading_and_filtering(tmp_path):
