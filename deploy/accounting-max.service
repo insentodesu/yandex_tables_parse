@@ -1,0 +1,14 @@
+[Unit]
+Description=Accounting MAX bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/accounting_max_bot
+ExecStart=/root/accounting_max_bot/deploy/run-accounting-max.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
