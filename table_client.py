@@ -246,7 +246,12 @@ class TableClient:
                 )
         if payload is None:
             if last_api_err is not None:
-                raise last_api_err
+                raise RuntimeError(
+                    f"{last_api_err} "
+                    "Если у ссылки отключено скачивание, публичный API Яндекса часто отвечает 403 даже с паролем — "
+                    "включите скачивание в настройках ссылки или перейдите на "
+                    "TABLE_SOURCE_TYPE=yandex_disk_xlsx с YANDEX_DISK_TOKEN и TABLE_DISK_PATH."
+                ) from last_api_err
             raise RuntimeError("Yandex public download: no API response")
 
         download_url = normalize_cell(payload.get("href", ""))
@@ -293,7 +298,10 @@ class TableClient:
         return self._download_bytes(download_url, auth_headers)
 
     def _fetch_json(self, url: str, extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
-        raw = self._download_bytes(url, extra_headers)
+        merged = dict(extra_headers or {})
+        if "cloud-api.yandex.net" in url:
+            merged["Accept"] = "application/json"
+        raw = self._download_bytes(url, merged if merged else None)
         data = json.loads(raw.decode("utf-8"))
         if not isinstance(data, dict):
             raise ValueError("Expected JSON object from Yandex public API")

@@ -73,6 +73,19 @@ python run.py
 
 Deployment examples are in `deploy/run-accounting-max.sh` and `deploy/accounting-max.service`.
 
+### Updating on the server
+
+If `git pull` reports **divergent branches**, align with GitHub and redeploy:
+
+```bash
+cd ~/yandex_tables_parse
+git fetch origin
+git reset --hard origin/main
+sudo systemctl restart accounting-max
+```
+
+After a successful update, errors from Yandex should appear as `RuntimeError: Yandex Disk API HTTP ...` in the log, not a bare `urllib.error.HTTPError`.
+
 ## Notes
 
 - The bot does not clear the command cell after sending.
