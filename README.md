@@ -60,7 +60,7 @@ python prepare_yandex_template.py
    - `TABLE_SOURCE_TYPE`
    - `TABLE_SOURCE`
    - For Yandex public links with a password: `TABLE_YANDEX_PUBLIC_PASSWORD`, and `TABLE_YANDEX_PUBLIC_PATH` when needed.
-   - For OAuth Disk access: `YANDEX_DISK_TOKEN`, `TABLE_DISK_PATH`, and `TABLE_SOURCE_TYPE=yandex_disk_xlsx` or `yandex_disk_csv`.
+   - For OAuth Disk access: `YANDEX_DISK_TOKEN`, `TABLE_DISK_PATH`, and `TABLE_SOURCE_TYPE=yandex_disk_xlsx` or `yandex_disk_csv`. `TABLE_SOURCE` is not required in this mode. Get a token: create an app at [oauth.yandex.com/client/new](https://oauth.yandex.com/client/new/), enable **cloud_api:disk.read**, then open `https://oauth.yandex.ru/authorize?response_type=token&client_id=<ClientID>` and copy `access_token` from the URL fragment (see [Disk API quickstart](https://yandex.com/dev/disk-api/doc/en/concepts/quickstart)).
 2. Start the bot:
 
 ```bash

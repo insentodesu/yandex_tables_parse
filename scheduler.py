@@ -176,19 +176,29 @@ async def run_scheduler_loop() -> None:
     if config.SEND_MODE == "max" and not config.MAX_CHAT_ID:
         logger.error("MAX_CHAT_ID не задан")
         sys.exit(1)
-    if not config.TABLE_SOURCE:
+    src_type = config.TABLE_SOURCE_TYPE.strip().lower()
+    disk_oauth = src_type in {"yandex_disk_xlsx", "yandex_disk_csv"}
+    if not disk_oauth and not config.TABLE_SOURCE:
         logger.error("TABLE_SOURCE не задан")
         sys.exit(1)
+    if disk_oauth:
+        if not config.YANDEX_DISK_TOKEN.strip():
+            logger.error("YANDEX_DISK_TOKEN не задан (нужен для %s)", src_type)
+            sys.exit(1)
+        if not config.TABLE_DISK_PATH.strip():
+            logger.error("TABLE_DISK_PATH не задан")
+            sys.exit(1)
 
     dedup_store.init_db()
     bot = create_bot() if config.SEND_MODE == "max" else None
     client = TableClient()
+    log_src = config.TABLE_DISK_PATH if disk_oauth else config.TABLE_SOURCE
     logger.info(
         "Планировщик запущен, mode=%s, интервал=%s сек, источник=%s (%s)",
         config.SEND_MODE,
         config.POLL_INTERVAL_SECONDS,
         config.TABLE_SOURCE_TYPE,
-        config.TABLE_SOURCE,
+        log_src,
     )
 
     while True:

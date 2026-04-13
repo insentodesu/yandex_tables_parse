@@ -27,6 +27,7 @@ import config
 logger = logging.getLogger(__name__)
 
 _RETRIABLE_HTTP_CODES = frozenset({429, 502, 503})
+_YANDEX_DISK_OAUTH_TYPES = frozenset({"yandex_disk_xlsx", "yandex_disk_csv"})
 
 
 def normalize_header(value: Any) -> str:
@@ -128,7 +129,7 @@ class TableClient:
         ]
 
     def _get_rows_sync(self) -> list[SpreadsheetRow]:
-        if not self.source:
+        if self.source_type not in _YANDEX_DISK_OAUTH_TYPES and not self.source:
             raise ValueError("TABLE_SOURCE is not configured")
 
         if self.source_type == "csv_url":
