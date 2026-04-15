@@ -24,6 +24,12 @@ def _normalize_command(value: str) -> str:
     return normalized.replace(",", "")
 
 
+def _command_uses_upd_short_format(command: str) -> bool:
+    """Короткое сообщение (Soul.Rent + 4 поля), если в тексте команды есть УПД."""
+    t = _normalize_value(command).casefold()
+    return "упд" in t or "upd" in t
+
+
 def _row_map(row: dict[str, Any]) -> dict[str, str]:
     return {
         _normalize_key(key): _normalize_value(value)
@@ -119,7 +125,7 @@ def _field_line(label: str, value: str) -> str:
 
 
 def _build_upd_to_invoice_body(command: str, row: dict[str, Any]) -> str:
-    """Только Дата, Клиент, Менеджер, Номер счета — по запросу для «УПД к Счету»."""
+    """Только Дата, Клиент, Менеджер, Номер счета — для любой команды, где в тексте есть УПД."""
     lines: list[str] = []
     brand = config.UPD_MESSAGE_BRAND.strip()
     if brand:
@@ -164,11 +170,11 @@ def build_message(
     *,
     command_column_key: str | None = None,
 ) -> str:
-    """Первая строка — текст из ячейки «Бухгалтеру в чат»; дальше все остальные непустые колонки строки."""
+    """Первая строка — текст из ячейки «Бухгалтеру в чат»; дальше полная строка или короткий формат для УПД."""
     command = command.strip()
     if not command:
         raise ValueError("Пустой текст команды")
-    if resolve_command(command) == "УПД к Счету":
+    if _command_uses_upd_short_format(command):
         return _build_upd_to_invoice_body(command, row)
     skip_key = command_column_key or "Бухгалтеру в чат"
     return _build_full_row_notification_body(command, row, command_column_key=skip_key)
