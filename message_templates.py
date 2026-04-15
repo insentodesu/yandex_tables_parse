@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from html import escape
 from typing import Any
 
+import config
+
 
 def _normalize_key(value: str) -> str:
     return " ".join(str(value or "").replace("\n", " ").split()).strip()
@@ -20,6 +22,23 @@ def _normalize_value(value: Any) -> str:
 def _normalize_command(value: str) -> str:
     normalized = _normalize_value(value).casefold()
     return normalized.replace(",", "")
+
+
+def _row_map(row: dict[str, Any]) -> dict[str, str]:
+    return {
+        _normalize_key(key): _normalize_value(value)
+        for key, value in row.items()
+        if _normalize_key(key)
+    }
+
+
+def _get(row: dict[str, Any], *aliases: str) -> str:
+    normalized = _row_map(row)
+    for alias in aliases:
+        value = normalized.get(_normalize_key(alias), "")
+        if value:
+            return value
+    return ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +118,26 @@ def _field_line(label: str, value: str) -> str:
     return f"<b>{escape(label)}: </b>{escape(value)}"
 
 
+def _build_upd_to_invoice_body(command: str, row: dict[str, Any]) -> str:
+    """Только Дата, Клиент, Менеджер, Номер счета — по запросу для «УПД к Счету»."""
+    lines: list[str] = []
+    brand = config.UPD_MESSAGE_BRAND.strip()
+    if brand:
+        lines.append(_bold(brand))
+    lines.append(_bold(_normalize_value(command)))
+    for label, aliases in (
+        ("Дата", ("Дата",)),
+        ("Клиент", ("Клиент", "Заказчик")),
+        ("Менеджер", ("Менеджер",)),
+        ("Номер счета", ("Номер счета", "Номер счета ")),
+    ):
+        value = _get(row, *aliases)
+        if not value:
+            continue
+        lines.append(_field_line(label, value))
+    return "\n".join(lines)
+
+
 def _build_full_row_notification_body(
     command: str,
     row: dict[str, Any],
@@ -129,5 +168,7 @@ def build_message(
     command = command.strip()
     if not command:
         raise ValueError("Пустой текст команды")
+    if resolve_command(command) == "УПД к Счету":
+        return _build_upd_to_invoice_body(command, row)
     skip_key = command_column_key or "Бухгалтеру в чат"
     return _build_full_row_notification_body(command, row, command_column_key=skip_key)

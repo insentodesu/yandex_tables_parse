@@ -86,10 +86,27 @@ def test_build_message_upd_to_invoice_uses_invoice_number():
     message = build_message("УПД к Счету", row)
 
     assert message == (
+        "<b>Soul.Rent</b>\n"
         "<b>УПД к Счету</b>\n"
         "<b>Дата: </b>28.03.2026\n"
         "<b>Менеджер: </b>Рассказова Д\n"
         "<b>Номер счета: </b>123"
+    )
+
+
+def test_build_message_upd_to_invoice_omits_brand_when_empty(monkeypatch):
+    import config as app_config
+
+    monkeypatch.setattr(app_config, "UPD_MESSAGE_BRAND", "")
+    row = {"Дата": "1", "Клиент": "X", "Менеджер": "Y", "Номер счета": "Z"}
+    message = build_message("УПД к Счету", row)
+    assert not message.startswith("<b>Soul.Rent")
+    assert message == (
+        "<b>УПД к Счету</b>\n"
+        "<b>Дата: </b>1\n"
+        "<b>Клиент: </b>X\n"
+        "<b>Менеджер: </b>Y\n"
+        "<b>Номер счета: </b>Z"
     )
 
 
@@ -164,18 +181,11 @@ def test_build_message_upd_to_invoice_full_row_order_matches_sheet_format():
     message = build_message("УПД к Счету", row)
 
     assert message == (
+        "<b>Soul.Rent</b>\n"
         "<b>УПД к Счету</b>\n"
         "<b>Дата: </b>2026-01-02\n"
         "<b>Клиент: </b>Стройпроекты\n"
         "<b>Менеджер: </b>Кузь\n"
-        "<b>Адрес доставки: </b>Орлово-Денисовский пр. д.19, ЖК &quot;Бионика&quot; (Хайтбаев)\n"
-        "<b>Услуга/товар: </b>Услуга\n"
-        "<b>Транспорт: </b>Мини погрузчик с щеткой\n"
-        "<b>ед. изм.: </b>м/ч\n"
-        "<b>Цена клиенту: </b>2 312,50\n"
-        "<b>Кол-во: </b>12.0\n"
-        "<b>Сумма клиенту: </b>27 750,00\n"
-        "<b>Своя Найм: </b>Н\n"
         "<b>Номер счета: </b>INV-001"
     )
 
