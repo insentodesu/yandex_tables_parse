@@ -32,6 +32,8 @@ _DEFAULT_HTTP_USER_AGENT: str = (
 HTTP_USER_AGENT: str = (os.getenv("HTTP_USER_AGENT", "") or _DEFAULT_HTTP_USER_AGENT).strip()
 
 POLL_INTERVAL_SECONDS: int = int(os.getenv("POLL_INTERVAL_SECONDS", "15"))
+# Один цикл загрузки XLSX с Диска (синхронно в thread); при превышении — ошибка в лог.
+TABLE_LOAD_TIMEOUT_SECONDS: float = float(os.getenv("TABLE_LOAD_TIMEOUT_SECONDS", "180") or "180")
 RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "2"))
 RETRY_DELAY_SECONDS: int = int(os.getenv("RETRY_DELAY_SECONDS", "2"))
 

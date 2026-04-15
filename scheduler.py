@@ -85,7 +85,18 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
     command_header_key = normalize_header(config.TABLE_COMMAND_COLUMN)
 
     logger.info("Загрузка таблицы из источника…")
-    rows = await table_client.get_rows()
+    try:
+        rows = await asyncio.wait_for(
+            table_client.get_rows(),
+            timeout=config.TABLE_LOAD_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "Таймаут загрузки таблицы (%s с): зависание сети/Диска или очень большой XLSX. "
+            "Увеличьте TABLE_LOAD_TIMEOUT_SECONDS в .env",
+            config.TABLE_LOAD_TIMEOUT_SECONDS,
+        )
+        raise
 
     for row in rows:
         row_key = dedup_store.build_row_key(row.sheet_name, row.row_number)

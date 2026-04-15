@@ -5,8 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/root/accounting_max_bot
-ExecStart=/root/accounting_max_bot/deploy/run-accounting-max.sh
+# Должен совпадать с каталогом клона (где .venv, .env, run.py). Пример:
+WorkingDirectory=/root/yandex_tables_parse
+ExecStart=/root/yandex_tables_parse/deploy/run-accounting-max.sh
 Restart=on-failure
 RestartSec=10
 
