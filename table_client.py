@@ -134,6 +134,8 @@ class TableClient:
         self.source = (source or config.TABLE_SOURCE).strip()
         self.sheet_name = (sheet_name or config.TABLE_SHEET_NAME).strip()
         self.command_column = normalize_header(command_column or config.TABLE_COMMAND_COLUMN)
+        self._last_yandex_disk_sha256: str | None = None
+        self._unchanged_disk_streak: int = 0
 
     async def get_rows(self) -> list[SpreadsheetRow]:
         return await asyncio.to_thread(self._get_rows_sync)
@@ -322,11 +324,32 @@ class TableClient:
     def _yandex_disk_oauth_load_bytes(self) -> bytes:
         self._log_yandex_disk_resource_meta()
         raw = self._download_yandex_disk_oauth_bytes()
+        sha = hashlib.sha256(raw).hexdigest()[:16]
         logger.info(
             "Скачанные байты с Диска: len=%s sha256=%s",
             len(raw),
-            hashlib.sha256(raw).hexdigest()[:16],
+            sha,
         )
+        if self._last_yandex_disk_sha256 is not None and sha == self._last_yandex_disk_sha256:
+            self._unchanged_disk_streak += 1
+            if self._unchanged_disk_streak == 3:
+                logger.warning(
+                    "Три опроса подряд один и тот же файл (sha256=%s). API Диска отдаёт те же байты — "
+                    "ваши правки не попали в файл по пути %s. Сохраните именно этот файл на Диск "
+                    "(перезапись по тому же пути), а не копию в другом месте; правки «в облаке» без "
+                    "синхронизации в этот .xlsx бот не увидит.",
+                    sha,
+                    config.TABLE_DISK_PATH,
+                )
+        else:
+            if self._last_yandex_disk_sha256 is not None and sha != self._last_yandex_disk_sha256:
+                logger.info(
+                    "Версия файла на Диске сменилась (sha256 %s -> %s)",
+                    self._last_yandex_disk_sha256,
+                    sha,
+                )
+            self._unchanged_disk_streak = 0
+        self._last_yandex_disk_sha256 = sha
         return raw
 
     def _download_yandex_disk_oauth_bytes(self) -> bytes:

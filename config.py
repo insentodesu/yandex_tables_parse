@@ -67,7 +67,21 @@ TABLE_YANDEX_PUBLIC_PASSWORD_PARAM: str = os.getenv("TABLE_YANDEX_PUBLIC_PASSWOR
 
 # OAuth access to your own Disk file (yandex_disk_*), when public API is blocked (e.g. download disabled).
 YANDEX_DISK_TOKEN: str = os.getenv("YANDEX_DISK_TOKEN", "").strip()
-TABLE_DISK_PATH: str = os.getenv("TABLE_DISK_PATH", "").strip()
+
+
+def normalize_yandex_disk_path(raw: str) -> str:
+    """API Диска ждёт путь вида /Имя или /папка/файл.xlsx; префикс disk: из примеров убираем."""
+    p = (raw or "").strip()
+    if not p:
+        return ""
+    if p.lower().startswith("disk:"):
+        p = p[5:].strip()
+    if not p.startswith("/"):
+        p = "/" + p
+    return p
+
+
+TABLE_DISK_PATH: str = normalize_yandex_disk_path(os.getenv("TABLE_DISK_PATH", ""))
 MONTH_SHEET_NAMES: tuple[str, ...] = (
     "Январь",
     "Февраль",
