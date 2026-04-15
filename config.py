@@ -58,6 +58,15 @@ TABLE_SOURCE_TYPE: str = os.getenv("TABLE_SOURCE_TYPE", "csv_url").strip().lower
 TABLE_SOURCE: str = os.getenv("TABLE_SOURCE", "").strip()
 TABLE_SHEET_NAME: str = os.getenv("TABLE_SHEET_NAME", "").strip()
 TABLE_COMMAND_COLUMN: str = os.getenv("TABLE_COMMAND_COLUMN", "Бухгалтеру в чат").strip()
+# По умолчанию уведомление только когда текст в колонке команды отличается от сохранённого в SQLite (дедуп).
+# Если true — на каждом опросе слать по каждой строке с валидной командой снова (спам в MAX каждые POLL_INTERVAL_SECONDS).
+TABLE_COMMAND_SEND_EVERY_POLL: bool = _as_bool(
+    os.getenv("TABLE_COMMAND_SEND_EVERY_POLL", "false"), default=False
+)
+# Раз в N секунд писать в INFO пояснение, когда отправок нет из‑за дедупа (0 = не писать).
+DEDUP_STATUS_INFO_INTERVAL_SECONDS: int = max(
+    0, int(os.getenv("DEDUP_STATUS_INFO_INTERVAL_SECONDS", "600") or "0")
+)
 
 # Public Yandex Disk link (yandex_public_*): optional path inside a published folder and link password.
 TABLE_YANDEX_PUBLIC_PATH: str = os.getenv("TABLE_YANDEX_PUBLIC_PATH", "").strip()
@@ -116,6 +125,8 @@ SOURCE_STRUCTURE_PATH: str = os.getenv(
     str(BASE_DIR / "templates" / "source_sheet_structure.json"),
 )
 
+# Пункты выпадающего списка в сгенерированном шаблоне; бот шлёт уведомление по любому непустому тексту
+# в колонке TABLE_COMMAND_COLUMN (не обязан совпадать с этим списком).
 CHAT_OPTIONS: list[str] = [
     "Альфа, Счет, Маршрут",
     "Альфа, Счет, УПД, Маршрут",

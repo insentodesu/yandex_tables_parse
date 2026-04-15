@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import time
 import urllib.error
 from pathlib import Path
 
@@ -20,13 +21,35 @@ from message_templates import (
     build_message,
     command_column_fingerprint,
     command_dedup_signature,
-    resolve_command,
     stored_command_dedup_key,
 )
 from table_client import TableClient, normalize_header
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+_last_dedup_status_log_at: float = 0.0
+
+
+def _maybe_log_dedup_no_send_hint(skipped_same_command: int) -> None:
+    """Редкое INFO: при дедупе без отправок объясняем, что бот читает файл на Диске, не сеанс в браузере."""
+    global _last_dedup_status_log_at
+    interval = config.DEDUP_STATUS_INFO_INTERVAL_SECONDS
+    if interval <= 0 or skipped_same_command <= 0:
+        return
+    now = time.monotonic()
+    if _last_dedup_status_log_at > 0.0 and (now - _last_dedup_status_log_at) < interval:
+        return
+    _last_dedup_status_log_at = now
+    logger.info(
+        "Уведомлений нет: в скачанном файле текст «%s» совпадает с уже сохранённым в БД (%s строк). "
+        "Если вы меняли таблицу в браузере, а в логах table_client долго не меняются md5/sha256 — "
+        "это не «очередь бота»: до API Диска ещё не дошла новая версия .xlsx; после смены md5/sha256 уведомления уйдут. "
+        "(Эта подсказка не чаще чем раз в %s с — DEDUP_STATUS_INFO_INTERVAL_SECONDS.)",
+        config.TABLE_COMMAND_COLUMN,
+        skipped_same_command,
+        interval,
+    )
 
 
 def _is_yandex_http_429(exc: BaseException) -> bool:
@@ -87,7 +110,6 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
     previous_snapshot = dedup_store.load_snapshot()
     next_snapshot: list[dedup_store.SnapshotEntry] = []
     skipped_same_command = 0
-    unsupported_command_rows = 0
 
     command_header_key = normalize_header(config.TABLE_COMMAND_COLUMN)
 
@@ -133,7 +155,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             )
             continue
 
-        if dedup_sig == stored_command_dedup_key(previous_command):
+        if dedup_sig == stored_command_dedup_key(previous_command) and not config.TABLE_COMMAND_SEND_EVERY_POLL:
             skipped_same_command += 1
             next_snapshot.append(
                 dedup_store.SnapshotEntry(
@@ -145,22 +167,8 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             )
             continue
 
-        resolved_command = resolve_command(raw_command)
-        if resolved_command is None:
-            unsupported_command_rows += 1
-            logger.error("Строка %s пропущена: Unsupported command: %s", row.row_number, raw_command)
-            next_snapshot.append(
-                dedup_store.SnapshotEntry(
-                    row_key=row_key,
-                    sheet_name=row.sheet_name,
-                    row_number=row.row_number,
-                    command=dedup_sig,
-                )
-            )
-            continue
-
         try:
-            text = build_message(raw_command, row.values)
+            text = build_message(raw_command, row.values, command_column_key=command_header_key)
         except Exception:
             logger.exception(
                 "Строка %s листа %s: ошибка сборки текста сообщения (проверьте данные строки)",
@@ -203,7 +211,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             "Отправлено уведомление sheet=%s row=%s command=%s",
             row.sheet_name,
             row.row_number,
-            resolved_command,
+            raw_command,
         )
 
     dedup_store.replace_snapshot(next_snapshot)
@@ -223,22 +231,14 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
         cmd_fp,
     )
 
-    if unsupported_command_rows:
-        logger.error(
-            "Ни одного сообщения: в %s строках значение в «%s» не из списка бота "
-            "(см. CHAT_OPTIONS / message_templates). Пример текста из ячейки смотрите выше (Unsupported command).",
-            unsupported_command_rows,
-            config.TABLE_COMMAND_COLUMN,
-        )
-
     # Обычное состояние после рассылки: таблица не менялась — не засоряем journalctl WARNING каждые N секунд.
     if (
         sent_count == 0
         and rows_with_command > 0
         and was_initialized
         and skipped_same_command > 0
-        and unsupported_command_rows == 0
     ):
+        _maybe_log_dedup_no_send_hint(skipped_same_command)
         logger.debug(
             "Отправок нет: для %s строк «%s» совпадает с SQLite (дедуп). Чтобы снова разослать текущие "
             "значения — rm %s и рестарт с BOOTSTRAP_SEND_MAX=true; иначе смените пункт в таблице.",
@@ -300,6 +300,12 @@ async def run_scheduler_loop() -> None:
             "Остановите сервис, выполните: rm -f %s — затем снова start (флаг можно оставить). "
             "После рассылки верните BOOTSTRAP_SEND_MAX=false.",
             config.DATABASE_PATH,
+        )
+    if config.TABLE_COMMAND_SEND_EVERY_POLL:
+        logger.warning(
+            "TABLE_COMMAND_SEND_EVERY_POLL включён: уведомления в MAX по каждой строке с валидной командой "
+            "на каждом опросе (интервал %s с) — возможен сильный спам.",
+            config.POLL_INTERVAL_SECONDS,
         )
 
     while True:

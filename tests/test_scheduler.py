@@ -75,6 +75,31 @@ def test_process_pending_rows_bootstrap_sends_when_flag_true(tmp_path, monkeypat
     dedup_store._db_path = None
 
 
+def test_process_pending_rows_sends_every_poll_when_flag_true(tmp_path, monkeypatch):
+    dedup_store._db_path = str(tmp_path / "scheduler_every_poll.db")
+    monkeypatch.setattr(scheduler.config, "MAX_CHAT_ID", 123456)
+    monkeypatch.setattr(scheduler.config, "SEND_MODE", "max")
+    monkeypatch.setattr(scheduler.config, "TABLE_COMMAND_SEND_EVERY_POLL", True)
+
+    client = SequenceClient(
+        [
+            [make_row("Альфа, Счет")],
+            [make_row("Альфа, Счет")],
+            [make_row("Альфа, Счет")],
+        ]
+    )
+    bot = AsyncMock()
+    first_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+    second_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+    third_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+
+    assert first_count == 0
+    assert second_count == 1
+    assert third_count == 1
+    assert bot.send_message.call_count == 2
+    dedup_store._db_path = None
+
+
 def test_process_pending_rows_console_mode_prints_message(tmp_path, monkeypatch):
     dedup_store._db_path = str(tmp_path / "scheduler_console.db")
     monkeypatch.setattr(scheduler.config, "SEND_MODE", "console")

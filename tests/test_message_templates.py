@@ -24,19 +24,21 @@ def test_build_message_alpha_with_upd_and_route():
     assert message == (
         "<b>Альфа, Счет, УПД, Маршрут</b>\n"
         "<b>Дата: </b>28.03.2026\n"
-        "<b>Заказчик: </b>ЭС\n"
+        "<b>Клиент: </b>ЭС\n"
         "<b>Менеджер: </b>Рассказова Д\n"
+        "<b>Номер счета: </b>123\n"
+        "<b>номер УПД: </b>456\n"
         "<b>Адрес доставки: </b>Красное село код 3.24\n"
-        "<b>Транспорт: </b>Манипулятор 8т\n"
-        "<b>ед. изм.: </b>м/ч\n"
+        "<b>Наименование услуги: </b>Манипулятор 8т\n"
         "<b>Цена клиенту: </b>3 600,00\n"
         "<b>Кол-во: </b>14\n"
-        "<b>Номер счета: </b>123"
+        "<b>ед. изм.: </b>м/ч"
     )
 
 
 def test_build_message_full_info_uses_selected_command_and_full_row():
     row = {
+        "Бухгалтеру в чат": "Точка Полная Инф",
         "Дата": "28.03.2026",
         "Клиент": "ЭС",
         "Менеджер": "Рассказова Д",
@@ -53,21 +55,24 @@ def test_build_message_full_info_uses_selected_command_and_full_row():
         "Номер вход.док.": "789",
     }
 
-    message = build_message("Точка Полная Инф", row)
+    message = build_message("Точка Полная Инф", row, command_column_key="Бухгалтеру в чат")
 
     assert message == (
         "<b>Точка Полная Инф</b>\n"
         "<b>Дата: </b>28.03.2026\n"
-        "<b>Заказчик: </b>ЭС\n"
+        "<b>Клиент: </b>ЭС\n"
         "<b>Менеджер: </b>Рассказова Д\n"
+        "<b>Номер счета: </b>123\n"
+        "<b>номер УПД: </b>456\n"
         "<b>Адрес доставки: </b>Маршрут\n"
-        "<b>Транспорт: </b>Манипулятор 8т\n"
+        "<b>Наименование услуги: </b>Манипулятор 8т\n"
         "<b>Водитель: </b>Иванов И.И.\n"
-        "<b>ед. изм.: </b>м/ч\n"
         "<b>Цена клиенту: </b>3 600,00\n"
         "<b>Кол-во: </b>14\n"
+        "<b>ед. изм.: </b>м/ч\n"
         "<b>Сумма клиенту: </b>50 400,00\n"
-        "<b>Номер счета: </b>123"
+        "<b>Поставщик: </b>ООО Поставщик\n"
+        "<b>Номер вход.док.: </b>789"
     )
 
 
@@ -104,12 +109,12 @@ def test_build_message_accepts_command_without_commas():
     assert message == (
         "<b>Альфа Счет УПД</b>\n"
         "<b>Дата: </b>28.03.2026\n"
-        "<b>Заказчик: </b>ЭС\n"
+        "<b>Клиент: </b>ЭС\n"
         "<b>Менеджер: </b>Рассказова Д\n"
-        "<b>Транспорт: </b>Манипулятор 8т\n"
-        "<b>ед. изм.: </b>м/ч\n"
+        "<b>Наименование услуги: </b>Манипулятор 8т\n"
         "<b>Цена клиенту: </b>3 600,00\n"
-        "<b>Кол-во: </b>14"
+        "<b>Кол-во: </b>14\n"
+        "<b>ед. изм.: </b>м/ч"
     )
 
 
@@ -130,13 +135,13 @@ def test_build_message_ip_route_uses_selected_dropdown_title():
     assert message == (
         "<b>ИП Точка Счет Акт Маршрут</b>\n"
         "<b>Дата: </b>28.03.2026\n"
-        "<b>Заказчик: </b>ЭС\n"
+        "<b>Клиент: </b>ЭС\n"
         "<b>Менеджер: </b>Рассказова Д\n"
         "<b>Адрес доставки: </b>Маршрут\n"
-        "<b>Транспорт: </b>Манипулятор 8т\n"
-        "<b>ед. изм.: </b>м/ч\n"
+        "<b>Наименование услуги: </b>Манипулятор 8т\n"
         "<b>Цена клиенту: </b>3 600,00\n"
-        "<b>Кол-во: </b>14"
+        "<b>Кол-во: </b>14\n"
+        "<b>ед. изм.: </b>м/ч"
     )
 
 
@@ -161,7 +166,7 @@ def test_build_message_upd_to_invoice_full_row_order_matches_sheet_format():
     assert message == (
         "<b>УПД к Счету</b>\n"
         "<b>Дата: </b>2026-01-02\n"
-        "<b>Заказчик: </b>Стройпроекты\n"
+        "<b>Клиент: </b>Стройпроекты\n"
         "<b>Менеджер: </b>Кузь\n"
         "<b>Адрес доставки: </b>Орлово-Денисовский пр. д.19, ЖК &quot;Бионика&quot; (Хайтбаев)\n"
         "<b>Услуга/товар: </b>Услуга\n"
@@ -175,9 +180,17 @@ def test_build_message_upd_to_invoice_full_row_order_matches_sheet_format():
     )
 
 
-def test_build_message_rejects_unknown_command():
-    with pytest.raises(ValueError, match="Unsupported command"):
-        build_message("Неизвестная команда", {})
+def test_build_message_accepts_any_command_text_not_in_template_list():
+    row = {"Сумма": "100", "Примечание": "тест"}
+    message = build_message("Новый пункт, которого нет в TEMPLATE_SPECS", row)
+    assert "<b>Новый пункт, которого нет в TEMPLATE_SPECS</b>" in message
+    assert "<b>Сумма: </b>100" in message
+    assert "<b>Примечание: </b>тест" in message
+
+
+def test_build_message_rejects_empty_command():
+    with pytest.raises(ValueError, match="Пустой текст команды"):
+        build_message("   ", {"Дата": "1"})
 
 
 def test_stored_command_dedup_key_matches_signature_for_roundtrip():
