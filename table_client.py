@@ -334,15 +334,49 @@ class TableClient:
         return result
 
     def _load_xlsx(self, content: bytes) -> list[SpreadsheetRow]:
+        if not content:
+            raise ValueError("XLSX: пустой ответ при скачивании (0 байт)")
+
+        openpyxl_errors: list[str] = []
+
+        for read_only in (True, False):
+            try:
+                bio = io.BytesIO(content)
+                workbook = load_workbook(
+                    filename=bio,
+                    data_only=True,
+                    read_only=read_only,
+                )
+                try:
+                    return self._load_xlsx_rows_with_openpyxl(workbook)
+                finally:
+                    closer = getattr(workbook, "close", None)
+                    if callable(closer):
+                        try:
+                            closer()
+                        except Exception:
+                            pass
+            except Exception as exc:
+                openpyxl_errors.append(f"read_only={read_only}: {exc!r}")
+                logger.warning(
+                    "openpyxl не смог прочитать XLSX (read_only=%s): %s",
+                    read_only,
+                    exc,
+                )
+
         try:
-            workbook = load_workbook(
-                filename=io.BytesIO(content),
-                data_only=True,
-                read_only=True,
-            )
-            return self._load_xlsx_rows_with_openpyxl(workbook)
-        except Exception:
             return self._load_xlsx_rows_with_calamine(content)
+        except Exception as exc_cal:
+            joined = "; ".join(openpyxl_errors)
+            logger.error(
+                "calamine не смог прочитать XLSX: %s | openpyxl до этого: %s",
+                exc_cal,
+                joined,
+            )
+            raise RuntimeError(
+                "Не удалось прочитать XLSX (ни openpyxl, ни calamine). "
+                f"Openpyxl: {joined}. Calamine: {exc_cal!r}"
+            ) from exc_cal
 
     def _load_xlsx_rows_with_openpyxl(self, workbook: Any) -> list[SpreadsheetRow]:
         result: list[SpreadsheetRow] = []
