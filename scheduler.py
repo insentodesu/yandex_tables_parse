@@ -16,7 +16,7 @@ import config
 import dedup_store
 from logging_config import setup_logging
 from message_templates import build_message, canonicalize_command, resolve_command
-from table_client import TableClient
+from table_client import TableClient, normalize_header
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -79,7 +79,12 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
     previous_snapshot = dedup_store.load_snapshot()
     next_snapshot: list[dedup_store.SnapshotEntry] = []
 
-    for row in await table_client.get_rows():
+    command_header_key = normalize_header(config.TABLE_COMMAND_COLUMN)
+
+    logger.info("Загрузка таблицы из источника…")
+    rows = await table_client.get_rows()
+
+    for row in rows:
         row_key = dedup_store.build_row_key(row.sheet_name, row.row_number)
         previous_command = previous_snapshot.get(
             row_key,
@@ -90,7 +95,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
                 command="",
             ),
         ).command
-        raw_command = row.values.get(config.TABLE_COMMAND_COLUMN, "").strip()
+        raw_command = row.values.get(command_header_key, "").strip()
         current_command = canonicalize_command(raw_command)
 
         if not current_command:
@@ -163,6 +168,19 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
 
     dedup_store.replace_snapshot(next_snapshot)
 
+    rows_with_command = sum(
+        1
+        for r in rows
+        if canonicalize_command(str(r.values.get(command_header_key, "")).strip())
+    )
+    logger.info(
+        "Опрос: строк в файле=%s, с заполненным «%s»=%s, отправлено в MAX=%s",
+        len(rows),
+        config.TABLE_COMMAND_COLUMN,
+        rows_with_command,
+        sent_count,
+    )
+
     return sent_count
 
 
@@ -203,9 +221,7 @@ async def run_scheduler_loop() -> None:
 
     while True:
         try:
-            sent_count = await process_pending_rows(bot, client)
-            if sent_count:
-                logger.info("За цикл отправлено %s уведомлений", sent_count)
+            await process_pending_rows(bot, client)
         except Exception as exc:
             logger.exception("Ошибка в polling-цикле")
             if config.RATE_LIMIT_COOLDOWN_SECONDS > 0 and _is_yandex_http_429(exc):
