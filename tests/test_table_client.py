@@ -218,3 +218,31 @@ def test_xlsx_reads_all_month_sheets():
     )
 
     assert [row.sheet_name for row in rows] == ["Январь", "Февраль"]
+
+
+def test_select_sheet_names_matches_month_trailing_space(monkeypatch):
+    monkeypatch.setattr(config, "TABLE_SHEET_NAME", "")
+    client = TableClient()
+    sel = client._select_sheet_names(["Январь ", "Февраль", "Март"])
+    assert sel == ["Январь ", "Февраль", "Март"]
+
+
+def test_select_sheet_names_matches_month_casefold(monkeypatch):
+    monkeypatch.setattr(config, "TABLE_SHEET_NAME", "")
+    client = TableClient()
+    sel = client._select_sheet_names(["ЯНВАРЬ", "февраль"])
+    assert len(sel) == 2
+
+
+def test_select_sheet_name_config_matches_loose(monkeypatch):
+    monkeypatch.setattr(config, "TABLE_SHEET_NAME", "Январь")
+    client = TableClient()
+    sel = client._select_sheet_names(["  январь  ", "Февраль"])
+    assert sel == ["  январь  "]
+
+
+def test_select_sheet_names_fallback_first_when_no_month_names(monkeypatch):
+    monkeypatch.setattr(config, "TABLE_SHEET_NAME", "")
+    client = TableClient()
+    sel = client._select_sheet_names(["Данные", "Архив"])
+    assert sel == ["Данные"]

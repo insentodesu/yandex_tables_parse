@@ -43,6 +43,11 @@ def normalize_cell(value: Any) -> str:
     return " ".join(text.split()).strip()
 
 
+def _sheet_name_match_key(name: str) -> str:
+    """Ключ для сопоставления имён листов (пробелы, регистр не важны)."""
+    return normalize_header(name).casefold()
+
+
 def _format_http_error_response(code: int, body: bytes) -> str:
     msg: str
     try:
@@ -409,13 +414,69 @@ class TableClient:
         return [workbook.active]
 
     def _select_sheet_names(self, sheet_names: tuple[str, ...] | list[str]) -> list[str]:
+        """Выбор листов: TABLE_SHEET_NAME или все месяцы из MONTH_SHEET_NAMES, найденные в книге.
+
+        Раньше использовалось точное вхождение `name in sheet_names` — из‑за пробела в «Январь »
+        или иного регистра месяцы не находились и читался только первый лист файла.
+        """
+        names_list = list(sheet_names)
+        if not names_list:
+            logger.info("XLSX: в книге нет листов")
+            return []
+
         if self.sheet_name:
+            want = _sheet_name_match_key(self.sheet_name)
+            for n in names_list:
+                if _sheet_name_match_key(n) == want:
+                    logger.info(
+                        "XLSX: листы в файле (%s) | выбран один лист по TABLE_SHEET_NAME: %s",
+                        len(names_list),
+                        n,
+                    )
+                    return [n]
+            logger.warning(
+                "TABLE_SHEET_NAME=%r не совпало ни с одним листом (%s). Берём как в конфиге — чтение может упасть.",
+                self.sheet_name,
+                ",".join(names_list),
+            )
             return [self.sheet_name]
-        month_sheets = [name for name in config.MONTH_SHEET_NAMES if name in sheet_names]
+
+        by_key: dict[str, str] = {}
+        for n in names_list:
+            k = _sheet_name_match_key(n)
+            if k:
+                by_key[k] = n
+
+        month_sheets: list[str] = []
+        for month in config.MONTH_SHEET_NAMES:
+            k = _sheet_name_match_key(month)
+            if k in by_key:
+                month_sheets.append(by_key[k])
+
         if month_sheets:
+            logger.info(
+                "XLSX: листы в файле (%s): %s | для опроса выбрано месяцев: %s — %s",
+                len(names_list),
+                ",".join(names_list),
+                len(month_sheets),
+                ",".join(month_sheets),
+            )
+            if len(month_sheets) < 12:
+                logger.info(
+                    "В книге найдено %s месячных листов из 12 (остальные имена не совпали с Январь…Декабрь).",
+                    len(month_sheets),
+                )
             return month_sheets
-        if sheet_names:
-            return [sheet_names[0]]
+
+        if names_list:
+            logger.warning(
+                "Ни один лист не совпал с именами Январь…Декабрь (без учёта регистра и лишних пробелов). "
+                "В файле: %s. Читается только первый лист %r — правки на других листах бот не увидит. "
+                "Переименуйте листы или задайте TABLE_SHEET_NAME.",
+                ",".join(names_list),
+                names_list[0],
+            )
+            return [names_list[0]]
         return []
 
     def _build_spreadsheet_rows(
