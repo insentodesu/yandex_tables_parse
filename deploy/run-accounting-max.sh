@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Запускать из каталога репозитория: .../deploy/run-accounting-max.sh
 # WorkingDirectory в systemd должен совпадать с корнем проекта (где .venv и run.py).
 set -euo pipefail

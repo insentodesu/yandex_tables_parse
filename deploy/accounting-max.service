@@ -7,7 +7,9 @@ Wants=network-online.target
 Type=simple
 # Должен совпадать с каталогом клона (где .venv, .env, run.py). Пример:
 WorkingDirectory=/root/yandex_tables_parse
-ExecStart=/root/yandex_tables_parse/deploy/run-accounting-max.sh
+# Явно через bash: иначе ядро гоняет shebang — при CRLF или /usr/bin/env bash → systemd 203/EXEC
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/bin/bash /root/yandex_tables_parse/deploy/run-accounting-max.sh
 Restart=on-failure
 RestartSec=10
 
