@@ -68,8 +68,8 @@ DEDUP_STATUS_INFO_INTERVAL_SECONDS: int = max(
     0, int(os.getenv("DEDUP_STATUS_INFO_INTERVAL_SECONDS", "600") or "0")
 )
 
-# Первая строка в MAX, если в тексте команды есть «УПД» (короткий формат: 4 поля); пусто — без бренд-строки.
-UPD_MESSAGE_BRAND: str = os.getenv("UPD_MESSAGE_BRAND", "Soul.Rent").strip()
+# Опциональная первая строка в MAX для команд с «УПД» (короткий формат); по умолчанию не выводится.
+UPD_MESSAGE_BRAND: str = os.getenv("UPD_MESSAGE_BRAND", "").strip()
 
 # Public Yandex Disk link (yandex_public_*): optional path inside a published folder and link password.
 TABLE_YANDEX_PUBLIC_PATH: str = os.getenv("TABLE_YANDEX_PUBLIC_PATH", "").strip()

@@ -22,7 +22,6 @@ def test_build_message_alpha_with_upd_and_route():
     message = build_message("Альфа, Счет, УПД, Маршрут", row)
 
     assert message == (
-        "<b>Soul.Rent</b>\n"
         "<b>Альфа, Счет, УПД, Маршрут</b>\n"
         "<b>Дата: </b>28.03.2026\n"
         "<b>Клиент: </b>ЭС\n"
@@ -76,7 +75,6 @@ def test_build_message_upd_to_invoice_uses_invoice_number():
     message = build_message("УПД к Счету", row)
 
     assert message == (
-        "<b>Soul.Rent</b>\n"
         "<b>УПД к Счету</b>\n"
         "<b>Дата: </b>28.03.2026\n"
         "<b>Менеджер: </b>Рассказова Д\n"
@@ -84,20 +82,14 @@ def test_build_message_upd_to_invoice_uses_invoice_number():
     )
 
 
-def test_build_message_upd_to_invoice_omits_brand_when_empty(monkeypatch):
+def test_build_message_upd_shows_brand_when_config_set(monkeypatch):
     import config as app_config
 
-    monkeypatch.setattr(app_config, "UPD_MESSAGE_BRAND", "")
+    monkeypatch.setattr(app_config, "UPD_MESSAGE_BRAND", "Acme")
     row = {"Дата": "1", "Клиент": "X", "Менеджер": "Y", "Номер счета": "Z"}
     message = build_message("УПД к Счету", row)
-    assert not message.startswith("<b>Soul.Rent")
-    assert message == (
-        "<b>УПД к Счету</b>\n"
-        "<b>Дата: </b>1\n"
-        "<b>Клиент: </b>X\n"
-        "<b>Менеджер: </b>Y\n"
-        "<b>Номер счета: </b>Z"
-    )
+    assert message.startswith("<b>Acme</b>\n")
+    assert "<b>УПД к Счету</b>" in message
 
 
 def test_build_message_accepts_command_without_commas():
@@ -114,7 +106,6 @@ def test_build_message_accepts_command_without_commas():
     message = build_message("Альфа Счет УПД", row)
 
     assert message == (
-        "<b>Soul.Rent</b>\n"
         "<b>Альфа Счет УПД</b>\n"
         "<b>Дата: </b>28.03.2026\n"
         "<b>Клиент: </b>ЭС\n"
@@ -172,7 +163,6 @@ def test_build_message_upd_to_invoice_full_row_order_matches_sheet_format():
     message = build_message("УПД к Счету", row)
 
     assert message == (
-        "<b>Soul.Rent</b>\n"
         "<b>УПД к Счету</b>\n"
         "<b>Дата: </b>2026-01-02\n"
         "<b>Клиент: </b>Стройпроекты\n"

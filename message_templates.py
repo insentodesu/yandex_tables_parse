@@ -25,7 +25,7 @@ def _normalize_command(value: str) -> str:
 
 
 def _command_uses_upd_short_format(command: str) -> bool:
-    """Короткое сообщение (Soul.Rent + 4 поля), если в тексте команды есть УПД."""
+    """Короткое сообщение (опц. бренд + 4 поля), если в тексте команды есть УПД."""
     t = _normalize_value(command).casefold()
     return "упд" in t or "upd" in t
 
