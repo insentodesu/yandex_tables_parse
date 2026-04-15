@@ -6,6 +6,7 @@ import asyncio
 import logging
 import sys
 import urllib.error
+from pathlib import Path
 
 from aiohttp import TCPConnector
 from maxapi import Bot
@@ -274,6 +275,11 @@ async def run_scheduler_loop() -> None:
         config.POLL_INTERVAL_SECONDS,
         config.TABLE_SOURCE_TYPE,
         log_src,
+    )
+    logger.info(
+        "Код: scheduler.py=%s | BASE_DIR=%s (если путь не ваш клон репозитория — обновите unit systemd)",
+        Path(__file__).resolve(),
+        config.BASE_DIR,
     )
     logger.info(
         "Дедупликация: файл БД %s (повторная отправка только при смене значения в «%s»)",
