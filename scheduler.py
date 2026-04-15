@@ -286,6 +286,14 @@ async def run_scheduler_loop() -> None:
         config.DATABASE_PATH,
         config.TABLE_COMMAND_COLUMN,
     )
+    if config.BOOTSTRAP_SEND_MAX and snap_init:
+        logger.warning(
+            "BOOTSTRAP_SEND_MAX включён, но в SQLite уже есть снимок (snapshot_initialized=true). "
+            "Одноразовая рассылка срабатывает только при первом опросе после удаления файла БД. "
+            "Остановите сервис, выполните: rm -f %s — затем снова start (флаг можно оставить). "
+            "После рассылки верните BOOTSTRAP_SEND_MAX=false.",
+            config.DATABASE_PATH,
+        )
 
     while True:
         try:
