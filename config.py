@@ -50,6 +50,9 @@ DATABASE_PATH: str = os.getenv(
     "DATABASE_PATH",
     str(BASE_DIR / "data" / "accounting_max_bot.db"),
 )
+# После rm БД первый цикл по умолчанию только запоминает строки без MAX. Если 1 — в этом же цикле
+# отправить уведомления по всем строкам с валидной командой (как «рассылка текущего состояния»).
+BOOTSTRAP_SEND_MAX: bool = _as_bool(os.getenv("BOOTSTRAP_SEND_MAX", "false"), default=False)
 
 TABLE_SOURCE_TYPE: str = os.getenv("TABLE_SOURCE_TYPE", "csv_url").strip().lower()
 TABLE_SOURCE: str = os.getenv("TABLE_SOURCE", "").strip()

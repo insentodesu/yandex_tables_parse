@@ -58,6 +58,23 @@ def test_process_pending_rows_bootstraps_snapshot_without_sending(tmp_path, monk
     dedup_store._db_path = None
 
 
+def test_process_pending_rows_bootstrap_sends_when_flag_true(tmp_path, monkeypatch):
+    dedup_store._db_path = str(tmp_path / "scheduler_bootstrap_send.db")
+    monkeypatch.setattr(scheduler.config, "MAX_CHAT_ID", 123456)
+    monkeypatch.setattr(scheduler.config, "SEND_MODE", "max")
+    monkeypatch.setattr(scheduler.config, "BOOTSTRAP_SEND_MAX", True)
+
+    client = SequenceClient([[make_row("Альфа, Счет")], [make_row("Альфа, Счет")]])
+    bot = AsyncMock()
+    first_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+    second_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+
+    assert first_count == 1
+    assert second_count == 0
+    bot.send_message.assert_called_once()
+    dedup_store._db_path = None
+
+
 def test_process_pending_rows_console_mode_prints_message(tmp_path, monkeypatch):
     dedup_store._db_path = str(tmp_path / "scheduler_console.db")
     monkeypatch.setattr(scheduler.config, "SEND_MODE", "console")

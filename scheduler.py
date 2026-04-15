@@ -116,7 +116,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
         if not current_command:
             continue
 
-        if not is_initialized:
+        if not is_initialized and not config.BOOTSTRAP_SEND_MAX:
             next_snapshot.append(
                 dedup_store.SnapshotEntry(
                     row_key=row_key,
@@ -232,8 +232,9 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
     ):
         logger.warning(
             "В канал ничего не отправлено: для %s строк выбор в «%s» совпадает с уже сохранённым "
-            "в SQLite (бот не дублирует то же самое). Смените пункт в выпадающем списке на другой "
-            "или удалите файл БД и перезапустите сервис для сброса: %s",
+            "в SQLite (бот не дублирует то же самое). Смените пункт в списке; либо после rm БД "
+            "в .env поставьте BOOTSTRAP_SEND_MAX=1 на один рестарт (одна рассылка текущих строк). "
+            "Файл БД: %s",
             skipped_same_command,
             config.TABLE_COMMAND_COLUMN,
             config.DATABASE_PATH,
@@ -266,14 +267,18 @@ async def run_scheduler_loop() -> None:
             sys.exit(1)
 
     dedup_store.init_db()
+    snap_init = dedup_store.snapshot_initialized()
     bot = create_bot() if config.SEND_MODE == "max" else None
     client = TableClient()
     log_src = config.TABLE_DISK_PATH if disk_oauth else config.TABLE_SOURCE
-    # Одна строка: по ней в journalctl сразу видно, что подтянут свежий код (путь BASE_DIR и БД).
+    # Одна строка: по ней в journalctl видно версию кода, .env (BOOTSTRAP_SEND_MAX) и был ли уже снимок в БД.
     logger.info(
-        "Старт бота | mode=%s poll=%ss | источник=%s (%s) | BASE_DIR=%s | scheduler=%s | БД=%s | колонка=%s",
+        "Старт бота | mode=%s poll=%ss | BOOTSTRAP_SEND_MAX=%s | snapshot_initialized=%s | "
+        "источник=%s (%s) | BASE_DIR=%s | scheduler=%s | БД=%s | колонка=%s",
         config.SEND_MODE,
         config.POLL_INTERVAL_SECONDS,
+        config.BOOTSTRAP_SEND_MAX,
+        snap_init,
         config.TABLE_SOURCE_TYPE,
         log_src,
         config.BASE_DIR,
