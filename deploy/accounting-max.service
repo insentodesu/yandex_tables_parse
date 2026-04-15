@@ -5,11 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Должен совпадать с каталогом клона (где .venv, .env, run.py). Пример:
+# Каталог клона: .venv, .env, run.py. Подставь свой путь, если не /root/yandex_tables_parse
 WorkingDirectory=/root/yandex_tables_parse
-# Явно через bash: иначе ядро гоняет shebang — при CRLF или /usr/bin/env bash → systemd 203/EXEC
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/bin/bash /root/yandex_tables_parse/deploy/run-accounting-max.sh
+# Прямой запуск Python — без bash-скрипта (нет systemd 203/EXEC из-за shebang/CRLF/правок run-accounting-max.sh).
+# Нужен: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+ExecStart=/root/yandex_tables_parse/.venv/bin/python /root/yandex_tables_parse/run.py
 Restart=on-failure
 RestartSec=10
 
