@@ -76,8 +76,11 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
     table_client = client or TableClient()
     sent_count = 0
     is_initialized = dedup_store.snapshot_initialized()
+    was_initialized = is_initialized
     previous_snapshot = dedup_store.load_snapshot()
     next_snapshot: list[dedup_store.SnapshotEntry] = []
+    skipped_same_command = 0
+    unsupported_command_rows = 0
 
     command_header_key = normalize_header(config.TABLE_COMMAND_COLUMN)
 
@@ -113,6 +116,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             continue
 
         if current_command == previous_command:
+            skipped_same_command += 1
             next_snapshot.append(
                 dedup_store.SnapshotEntry(
                     row_key=row_key,
@@ -125,6 +129,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
 
         resolved_command = resolve_command(raw_command)
         if resolved_command is None:
+            unsupported_command_rows += 1
             logger.error("Строка %s пропущена: Unsupported command: %s", row.row_number, raw_command)
             next_snapshot.append(
                 dedup_store.SnapshotEntry(
@@ -136,7 +141,24 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             )
             continue
 
-        text = build_message(raw_command, row.values)
+        try:
+            text = build_message(raw_command, row.values)
+        except Exception:
+            logger.exception(
+                "Строка %s листа %s: ошибка сборки текста сообщения (проверьте данные строки)",
+                row.row_number,
+                row.sheet_name,
+            )
+            next_snapshot.append(
+                dedup_store.SnapshotEntry(
+                    row_key=row_key,
+                    sheet_name=row.sheet_name,
+                    row_number=row.row_number,
+                    command=current_command,
+                )
+            )
+            continue
+
         if not await send_accounting_message(bot, text):
             logger.error("Не удалось отправить строку %s листа %s", row.row_number, row.sheet_name)
             if previous_command:
@@ -181,6 +203,30 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
         sent_count,
     )
 
+    if unsupported_command_rows:
+        logger.error(
+            "Ни одного сообщения: в %s строках значение в «%s» не из списка бота "
+            "(см. CHAT_OPTIONS / message_templates). Пример текста из ячейки смотрите выше (Unsupported command).",
+            unsupported_command_rows,
+            config.TABLE_COMMAND_COLUMN,
+        )
+
+    if (
+        sent_count == 0
+        and rows_with_command > 0
+        and was_initialized
+        and skipped_same_command > 0
+        and unsupported_command_rows == 0
+    ):
+        logger.warning(
+            "В канал ничего не отправлено: для %s строк выбор в «%s» совпадает с уже сохранённым "
+            "в SQLite (бот не дублирует то же самое). Смените пункт в выпадающем списке на другой "
+            "или удалите файл БД и перезапустите сервис для сброса: %s",
+            skipped_same_command,
+            config.TABLE_COMMAND_COLUMN,
+            config.DATABASE_PATH,
+        )
+
     return sent_count
 
 
@@ -217,6 +263,11 @@ async def run_scheduler_loop() -> None:
         config.POLL_INTERVAL_SECONDS,
         config.TABLE_SOURCE_TYPE,
         log_src,
+    )
+    logger.info(
+        "Дедупликация: файл БД %s (повторная отправка только при смене значения в «%s»)",
+        config.DATABASE_PATH,
+        config.TABLE_COMMAND_COLUMN,
     )
 
     while True:
