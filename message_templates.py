@@ -111,8 +111,6 @@ DISPLAY_LABELS = {
 
 EXCLUDED_HEADERS = {
     _normalize_key("Бухгалтеру в чат"),
-    _normalize_key("Номер счета"),
-    _normalize_key("Номер счета "),
     _normalize_key("номер УПД"),
     _normalize_key("Номер УПД"),
     _normalize_key("Поставщик"),
