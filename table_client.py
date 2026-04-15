@@ -333,13 +333,12 @@ class TableClient:
         if self._last_yandex_disk_sha256 is not None and sha == self._last_yandex_disk_sha256:
             self._unchanged_disk_streak += 1
             if self._unchanged_disk_streak == 3:
-                logger.warning(
-                    "Три опроса подряд один и тот же файл (sha256=%s). API Диска отдаёт те же байты — "
-                    "ваши правки не попали в файл по пути %s. Сохраните именно этот файл на Диск "
-                    "(перезапись по тому же пути), а не копию в другом месте; правки «в облаке» без "
-                    "синхронизации в этот .xlsx бот не увидит.",
+                # В штатном режиме файл на Диске часто не меняется минутами — WARNING здесь путает.
+                # Если нужна диагностика «почему нет новых ячеек» — смотрите md5/modified в INFO выше или LOG_LEVEL=DEBUG.
+                logger.debug(
+                    "Три опроса подряд те же байты XLSX (sha256=%s). Пока md5 файла на Диске не сменится, "
+                    "новых значений в скачанном файле не будет.",
                     sha,
-                    config.TABLE_DISK_PATH,
                 )
         else:
             if self._last_yandex_disk_sha256 is not None and sha != self._last_yandex_disk_sha256:
