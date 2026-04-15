@@ -57,7 +57,7 @@ class SnapshotEntry:
     row_key: str
     sheet_name: str
     row_number: int
-    command: str
+    command: str  # command_dedup_signature: нормализованный текст ячейки «Бухгалтеру в чат»
 
 
 def build_row_key(sheet_name: str, row_number: int) -> str:

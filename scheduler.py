@@ -16,7 +16,7 @@ from maxapi.enums.parse_mode import ParseMode
 import config
 import dedup_store
 from logging_config import setup_logging
-from message_templates import build_message, canonicalize_command, resolve_command
+from message_templates import build_message, command_dedup_signature, resolve_command
 from table_client import TableClient, normalize_header
 
 setup_logging()
@@ -111,9 +111,9 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             ),
         ).command
         raw_command = row.values.get(command_header_key, "").strip()
-        current_command = canonicalize_command(raw_command)
+        dedup_sig = command_dedup_signature(raw_command)
 
-        if not current_command:
+        if not dedup_sig:
             continue
 
         if not is_initialized and not config.BOOTSTRAP_SEND_MAX:
@@ -122,19 +122,19 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
                     row_key=row_key,
                     sheet_name=row.sheet_name,
                     row_number=row.row_number,
-                    command=current_command,
+                    command=dedup_sig,
                 )
             )
             continue
 
-        if current_command == previous_command:
+        if dedup_sig == previous_command:
             skipped_same_command += 1
             next_snapshot.append(
                 dedup_store.SnapshotEntry(
                     row_key=row_key,
                     sheet_name=row.sheet_name,
                     row_number=row.row_number,
-                    command=current_command,
+                    command=dedup_sig,
                 )
             )
             continue
@@ -148,7 +148,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
                     row_key=row_key,
                     sheet_name=row.sheet_name,
                     row_number=row.row_number,
-                    command=current_command,
+                    command=dedup_sig,
                 )
             )
             continue
@@ -166,7 +166,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
                     row_key=row_key,
                     sheet_name=row.sheet_name,
                     row_number=row.row_number,
-                    command=current_command,
+                    command=dedup_sig,
                 )
             )
             continue
@@ -189,7 +189,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
                 row_key=row_key,
                 sheet_name=row.sheet_name,
                 row_number=row.row_number,
-                command=current_command,
+                command=dedup_sig,
             )
         )
         sent_count += 1
@@ -205,7 +205,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
     rows_with_command = sum(
         1
         for r in rows
-        if canonicalize_command(str(r.values.get(command_header_key, "")).strip())
+        if command_dedup_signature(str(r.values.get(command_header_key, "")).strip())
     )
     logger.info(
         "Опрос: строк в файле=%s, с заполненным «%s»=%s, отправлено в MAX=%s",

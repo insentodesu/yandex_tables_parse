@@ -99,6 +99,16 @@ def canonicalize_command(command: str) -> str:
     return resolve_command(command) or normalized_value
 
 
+def command_dedup_signature(raw_command: str) -> str:
+    """Текст ячейки после нормализации пробелов — ключ дедупа в SQLite.
+
+    Не путать с resolve_command/canonicalize_command: разные подписи в списке могут
+    сопоставляться с одним шаблоном, но пользователь меняет именно текст в ячейке —
+    при смене подписи уведомление должно уходить.
+    """
+    return _normalize_value(raw_command.strip())
+
+
 def _bold(value: str) -> str:
     return f"<b>{escape(value)}</b>"
 

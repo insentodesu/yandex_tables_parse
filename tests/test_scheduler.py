@@ -135,6 +135,29 @@ def test_process_pending_rows_sends_when_command_appears_later(tmp_path, monkeyp
     dedup_store._db_path = None
 
 
+def test_process_pending_rows_sends_when_raw_differs_but_template_same(tmp_path, monkeypatch):
+    """Разные подписи в ячейке, но один шаблон в COMMAND_ALIASES — дедуп по тексту, не по канону."""
+    dedup_store._db_path = str(tmp_path / "scheduler_raw_vs_canon.db")
+    monkeypatch.setattr(scheduler.config, "MAX_CHAT_ID", 123456)
+    monkeypatch.setattr(scheduler.config, "SEND_MODE", "max")
+
+    client = SequenceClient(
+        [
+            [make_row("Альфа, Счет")],
+            [make_row("Альфа Счет")],
+        ]
+    )
+    bot = AsyncMock()
+
+    first_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+    second_count = asyncio.run(scheduler.process_pending_rows(bot, client))
+
+    assert first_count == 0
+    assert second_count == 1
+    bot.send_message.assert_called_once()
+    dedup_store._db_path = None
+
+
 def test_process_pending_rows_sends_when_command_changes(tmp_path, monkeypatch):
     dedup_store._db_path = str(tmp_path / "scheduler_command_change.db")
     monkeypatch.setattr(scheduler.config, "MAX_CHAT_ID", 123456)
