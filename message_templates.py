@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import unicodedata
 from dataclasses import dataclass
 from html import escape
 from typing import Any
@@ -106,7 +108,28 @@ def command_dedup_signature(raw_command: str) -> str:
     сопоставляться с одним шаблоном, но пользователь меняет именно текст в ячейке —
     при смене подписи уведомление должно уходить.
     """
-    return _normalize_value(raw_command.strip())
+    s = _normalize_value(raw_command.strip())
+    return unicodedata.normalize("NFKC", s)
+
+
+def stored_command_dedup_key(stored: str) -> str:
+    """То же нормализованное представление, что и у command_dedup_signature, для сравнения с SQLite."""
+    if not stored:
+        return ""
+    return unicodedata.normalize("NFKC", _normalize_value(stored.strip()))
+
+
+def command_column_fingerprint(rows: list[Any], command_header_key: str) -> str:
+    """Короткий хэш по всем непустым значениям колонки команды (для логов: меняется ли файл между опросами)."""
+    parts: list[str] = []
+    for r in rows:
+        raw = str(r.values.get(command_header_key, "")).strip()
+        v = command_dedup_signature(raw)
+        if v:
+            parts.append(f"{r.sheet_name}:{r.row_number}:{v}")
+    parts.sort()
+    body = "|".join(parts)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()[:12]
 
 
 def _bold(value: str) -> str:

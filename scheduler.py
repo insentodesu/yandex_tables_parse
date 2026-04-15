@@ -16,7 +16,13 @@ from maxapi.enums.parse_mode import ParseMode
 import config
 import dedup_store
 from logging_config import setup_logging
-from message_templates import build_message, command_dedup_signature, resolve_command
+from message_templates import (
+    build_message,
+    command_column_fingerprint,
+    command_dedup_signature,
+    resolve_command,
+    stored_command_dedup_key,
+)
 from table_client import TableClient, normalize_header
 
 setup_logging()
@@ -127,7 +133,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             )
             continue
 
-        if dedup_sig == previous_command:
+        if dedup_sig == stored_command_dedup_key(previous_command):
             skipped_same_command += 1
             next_snapshot.append(
                 dedup_store.SnapshotEntry(
@@ -207,12 +213,14 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
         for r in rows
         if command_dedup_signature(str(r.values.get(command_header_key, "")).strip())
     )
+    cmd_fp = command_column_fingerprint(rows, command_header_key)
     logger.info(
-        "Опрос: строк в файле=%s, с заполненным «%s»=%s, отправлено в MAX=%s",
+        "Опрос: строк в файле=%s, с заполненным «%s»=%s, отправлено в MAX=%s, cmd_fp=%s",
         len(rows),
         config.TABLE_COMMAND_COLUMN,
         rows_with_command,
         sent_count,
+        cmd_fp,
     )
 
     if unsupported_command_rows:

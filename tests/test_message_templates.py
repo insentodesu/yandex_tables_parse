@@ -178,3 +178,22 @@ def test_build_message_upd_to_invoice_full_row_order_matches_sheet_format():
 def test_build_message_rejects_unknown_command():
     with pytest.raises(ValueError, match="Unsupported command"):
         build_message("Неизвестная команда", {})
+
+
+def test_stored_command_dedup_key_matches_signature_for_roundtrip():
+    from message_templates import command_dedup_signature, stored_command_dedup_key
+
+    raw = "Альфа, Счет"
+    sig = command_dedup_signature(raw)
+    assert stored_command_dedup_key(sig) == sig
+
+
+def test_command_column_fingerprint_length():
+    from types import SimpleNamespace
+
+    from message_templates import command_column_fingerprint
+
+    rows = [
+        SimpleNamespace(sheet_name="Январь", row_number=2, values={"К": "Альфа, Счет"}),
+    ]
+    assert len(command_column_fingerprint(rows, "К")) == 12

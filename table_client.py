@@ -7,6 +7,7 @@ import csv
 import io
 import json
 import logging
+from collections import Counter
 import random
 import ssl
 import time
@@ -166,6 +167,9 @@ class TableClient:
             "User-Agent": config.HTTP_USER_AGENT,
             "Accept": "*/*",
             "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+            # Снижаем риск отдачи старого XLSX с CDN/прокси при частом опросе.
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
         }
         if extra:
             headers.update(extra)
@@ -423,6 +427,16 @@ class TableClient:
             return []
 
         headers = [normalize_header(cell) for cell in rows[0]]
+        dup_count = Counter(h for h in headers if h)
+        for h, c in dup_count.items():
+            if c > 1:
+                logger.warning(
+                    "Дублируется заголовок столбца после нормализации: %r (%s раз). "
+                    "Значения в dict ячеек перезаписываются — колонка «%s» может читаться не из той ячейки.",
+                    h,
+                    c,
+                    config.TABLE_COMMAND_COLUMN,
+                )
         result: list[SpreadsheetRow] = []
         for row_number, row in enumerate(rows[1:], start=2):
             if not any(normalize_cell(cell) for cell in row):
