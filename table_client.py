@@ -358,14 +358,19 @@ class TableClient:
                             pass
             except Exception as exc:
                 openpyxl_errors.append(f"read_only={read_only}: {exc!r}")
-                logger.warning(
+                logger.debug(
                     "openpyxl не смог прочитать XLSX (read_only=%s): %s",
                     read_only,
                     exc,
                 )
 
         try:
-            return self._load_xlsx_rows_with_calamine(content)
+            rows = self._load_xlsx_rows_with_calamine(content)
+            if openpyxl_errors:
+                logger.info(
+                    "XLSX прочитан через calamine (openpyxl часто падает на файлах из Яндекса: invalid XML/stylesheet — это не ошибка, если строки загрузились)"
+                )
+            return rows
         except Exception as exc_cal:
             joined = "; ".join(openpyxl_errors)
             logger.error(
