@@ -144,22 +144,27 @@ def _build_upd_to_invoice_body(command: str, row: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _build_full_row_notification_body(
-    command: str,
-    row: dict[str, Any],
-    *,
-    command_column_key: str,
-) -> str:
-    """Все непустые ячейки строки (кроме колонки команды), порядок как в таблице."""
+# Без «УПД» в команде — только эти колонки (порядок фиксирован), остальные из строки не показываем.
+NON_UPD_FIXED_FIELDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Дата", ("Дата",)),
+    ("Клиент", ("Клиент", "Заказчик")),
+    ("Менеджер", ("Менеджер",)),
+    ("Адрес доставки", ("Адрес доставки",)),
+    ("Услуга/товар", ("Услуга/товар", "Услуга товар")),
+    ("Наименование услуги", ("Наименование услуги", "Транспорт")),
+    ("ед. изм.", ("ед. изм.",)),
+    ("Цена клиенту", ("Цена клиенту",)),
+    ("Кол-во", ("Кол-во",)),
+    ("Сумма клиенту", ("Сумма клиенту",)),
+)
+
+
+def _build_non_upd_fixed_body(command: str, row: dict[str, Any]) -> str:
     lines = [_bold(_normalize_value(command))]
-    skip = _normalize_key(command_column_key)
-    for key, raw in row.items():
-        if _normalize_key(key) == skip:
-            continue
-        value = _normalize_value(raw)
+    for label, aliases in NON_UPD_FIXED_FIELDS:
+        value = _get(row, *aliases)
         if not value:
             continue
-        label = _normalize_key(key)
         lines.append(_field_line(label, value))
     return "\n".join(lines)
 
@@ -170,11 +175,11 @@ def build_message(
     *,
     command_column_key: str | None = None,
 ) -> str:
-    """Первая строка — текст из ячейки «Бухгалтеру в чат»; дальше полная строка или короткий формат для УПД."""
+    """Первая строка — текст из ячейки «Бухгалтеру в чат»; дальше УПД (4 поля + бренд) или фиксированный набор полей."""
+    _ = command_column_key  # аргумент оставлен для совместимости с scheduler.process_pending_rows
     command = command.strip()
     if not command:
         raise ValueError("Пустой текст команды")
     if _command_uses_upd_short_format(command):
         return _build_upd_to_invoice_body(command, row)
-    skip_key = command_column_key or "Бухгалтеру в чат"
-    return _build_full_row_notification_body(command, row, command_column_key=skip_key)
+    return _build_non_upd_fixed_body(command, row)
