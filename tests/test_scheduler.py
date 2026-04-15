@@ -12,6 +12,8 @@ from table_client import SpreadsheetRow
 
 
 def make_row(command: str, **overrides):
+    sheet_name = overrides.pop("sheet_name", "Январь")
+    row_number = overrides.pop("row_number", 2)
     values = {
         "Бухгалтеру в чат": command,
         "Дата": "28.03.2026",
@@ -24,8 +26,7 @@ def make_row(command: str, **overrides):
         "Менеджер": "Рассказова Д",
     }
     values.update(overrides)
-    sheet_name = overrides.pop("sheet_name", "Январь")
-    return SpreadsheetRow(sheet_name=sheet_name, row_number=2, values=values)
+    return SpreadsheetRow(sheet_name=sheet_name, row_number=row_number, values=values)
 
 
 class SequenceClient:
@@ -136,6 +137,34 @@ def test_process_pending_rows_sends_when_command_changes(tmp_path, monkeypatch):
     assert first_count == 0
     assert second_count == 1
     bot.send_message.assert_called_once()
+    dedup_store._db_path = None
+
+
+def test_process_pending_rows_sends_each_command_change_in_one_cycle(tmp_path, monkeypatch):
+    dedup_store._db_path = str(tmp_path / "scheduler_multi_row_cycle.db")
+    monkeypatch.setattr(scheduler.config, "MAX_CHAT_ID", 123456)
+    monkeypatch.setattr(scheduler.config, "SEND_MODE", "max")
+
+    client = SequenceClient(
+        [
+            [
+                make_row("Альфа, Счет", sheet_name="Январь", row_number=2),
+                make_row("Точка, Счет", sheet_name="Февраль", row_number=3),
+            ],
+            [
+                make_row("Точка, Счет", sheet_name="Январь", row_number=2),
+                make_row("Точка, Счет, УПД", sheet_name="Февраль", row_number=3),
+            ],
+        ]
+    )
+    bot = AsyncMock()
+
+    first = asyncio.run(scheduler.process_pending_rows(bot, client))
+    second = asyncio.run(scheduler.process_pending_rows(bot, client))
+
+    assert first == 0
+    assert second == 2
+    assert bot.send_message.call_count == 2
     dedup_store._db_path = None
 
 

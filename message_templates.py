@@ -48,18 +48,21 @@ class TemplateSpec:
     aliases: tuple[str, ...] = ()
 
 
-COMMON_FIELDS = (
+# Поля в фиксированном порядке (только они попадают в MAX), не вся строка таблицы.
+MESSAGE_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("Дата", ("Дата",)),
     FieldSpec("Заказчик", ("Клиент",)),
-    FieldSpec("Транспорт", ("Наименование услуги",)),
-)
-
-ROUTE_FIELD = FieldSpec("Маршрут", ("Адрес доставки",))
-PRICE_FIELDS = (
-    FieldSpec("Цена Клиенту", ("Цена клиенту",)),
-    FieldSpec("Количество", ("Кол-во",)),
-    FieldSpec("Единица измерения", ("ед. изм.",)),
     FieldSpec("Менеджер", ("Менеджер",)),
+    FieldSpec("Адрес доставки", ("Адрес доставки",)),
+    FieldSpec("Услуга/товар", ("Услуга/товар", "Услуга товар")),
+    FieldSpec("Транспорт", ("Транспорт", "Наименование услуги")),
+    FieldSpec("Водитель", ("Водитель",)),
+    FieldSpec("ед. изм.", ("ед. изм.",)),
+    FieldSpec("Цена клиенту", ("Цена клиенту",)),
+    FieldSpec("Кол-во", ("Кол-во",)),
+    FieldSpec("Сумма клиенту", ("Сумма клиенту",)),
+    FieldSpec("Своя Найм", ("Своя Найм", "Своя найм")),
+    FieldSpec("Номер счета", ("Номер счета", "Номер счета ")),
 )
 
 
@@ -104,38 +107,13 @@ def _field_line(label: str, value: str) -> str:
     return f"<b>{escape(label)}: </b>{escape(value)}"
 
 
-DISPLAY_LABELS = {
-    "Клиент": "Заказчик",
-    "Наименование услуги": "Транспорт",
-}
-
-EXCLUDED_HEADERS = {
-    _normalize_key("Бухгалтеру в чат"),
-    _normalize_key("номер УПД"),
-    _normalize_key("Номер УПД"),
-    _normalize_key("Поставщик"),
-    _normalize_key("Номер вход.док."),
-    _normalize_key("Цена поставщика"),
-    _normalize_key("Сумма нам"),
-    _normalize_key("Прибыль С / Н"),
-    _normalize_key("Прибыль"),
-    _normalize_key("ЗП менеджер"),
-    _normalize_key("Наценка С / Н (%)"),
-    _normalize_key("Наценка"),
-}
-
-
-def _build_full_row_message(command: str, row: dict[str, Any]) -> str:
+def _build_notification_body(command: str, row: dict[str, Any]) -> str:
     lines = [_bold(_normalize_value(command))]
-
-    for raw_key, raw_value in row.items():
-        key = _normalize_key(raw_key)
-        value = _normalize_value(raw_value)
-        if not key or not value or key in EXCLUDED_HEADERS:
+    for spec in MESSAGE_FIELDS:
+        value = _get(row, *spec.aliases)
+        if not value:
             continue
-        label = DISPLAY_LABELS.get(key, key)
-        lines.append(_field_line(label, value))
-
+        lines.append(_field_line(spec.label, value))
     return "\n".join(lines)
 
 
@@ -144,4 +122,4 @@ def build_message(command: str, row: dict[str, Any]) -> str:
     resolved_command = resolve_command(command)
     if resolved_command is None:
         raise ValueError(f"Unsupported command: {command}")
-    return _build_full_row_message(command, row)
+    return _build_notification_body(command, row)
