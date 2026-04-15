@@ -223,6 +223,7 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
             config.TABLE_COMMAND_COLUMN,
         )
 
+    # Обычное состояние после рассылки: таблица не менялась — не засоряем journalctl WARNING каждые N секунд.
     if (
         sent_count == 0
         and rows_with_command > 0
@@ -230,11 +231,9 @@ async def process_pending_rows(bot: Bot | None, client: TableClient | None = Non
         and skipped_same_command > 0
         and unsupported_command_rows == 0
     ):
-        logger.warning(
-            "В канал ничего не отправлено: для %s строк выбор в «%s» совпадает с уже сохранённым "
-            "в SQLite (бот не дублирует то же самое). Смените пункт в списке; либо после rm БД "
-            "в .env поставьте BOOTSTRAP_SEND_MAX=1 на один рестарт (одна рассылка текущих строк). "
-            "Файл БД: %s",
+        logger.debug(
+            "Отправок нет: для %s строк «%s» совпадает с SQLite (дедуп). Чтобы снова разослать текущие "
+            "значения — rm %s и рестарт с BOOTSTRAP_SEND_MAX=true; иначе смените пункт в таблице.",
             skipped_same_command,
             config.TABLE_COMMAND_COLUMN,
             config.DATABASE_PATH,
