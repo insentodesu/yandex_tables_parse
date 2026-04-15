@@ -269,20 +269,15 @@ async def run_scheduler_loop() -> None:
     bot = create_bot() if config.SEND_MODE == "max" else None
     client = TableClient()
     log_src = config.TABLE_DISK_PATH if disk_oauth else config.TABLE_SOURCE
+    # Одна строка: по ней в journalctl сразу видно, что подтянут свежий код (путь BASE_DIR и БД).
     logger.info(
-        "Планировщик запущен, mode=%s, интервал=%s сек, источник=%s (%s)",
+        "Старт бота | mode=%s poll=%ss | источник=%s (%s) | BASE_DIR=%s | scheduler=%s | БД=%s | колонка=%s",
         config.SEND_MODE,
         config.POLL_INTERVAL_SECONDS,
         config.TABLE_SOURCE_TYPE,
         log_src,
-    )
-    logger.info(
-        "Код: scheduler.py=%s | BASE_DIR=%s (если путь не ваш клон репозитория — обновите unit systemd)",
-        Path(__file__).resolve(),
         config.BASE_DIR,
-    )
-    logger.info(
-        "Дедупликация: файл БД %s (повторная отправка только при смене значения в «%s»)",
+        Path(__file__).resolve(),
         config.DATABASE_PATH,
         config.TABLE_COMMAND_COLUMN,
     )
