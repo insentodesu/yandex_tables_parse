@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import logging
+import uuid
 from collections import Counter
 import random
 import ssl
@@ -162,9 +164,9 @@ class TableClient:
                 self._download_yandex_public_bytes(self.source).decode("utf-8-sig")
             )
         if self.source_type == "yandex_disk_xlsx":
-            return self._load_xlsx(self._download_yandex_disk_oauth_bytes())
+            return self._load_xlsx(self._yandex_disk_oauth_load_bytes())
         if self.source_type == "yandex_disk_csv":
-            return self._load_csv(self._download_yandex_disk_oauth_bytes().decode("utf-8-sig"))
+            return self._load_csv(self._yandex_disk_oauth_load_bytes().decode("utf-8-sig"))
         raise ValueError(f"Unsupported TABLE_SOURCE_TYPE: {self.source_type}")
 
     def _request_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -288,6 +290,45 @@ class TableClient:
                         raise
             raise exc
 
+    def _log_yandex_disk_resource_meta(self) -> None:
+        """Пишет в лог size/md5/modified с Диска — если при правках таблицы они не меняются, бот качает старый файл."""
+        token = config.YANDEX_DISK_TOKEN.strip()
+        disk_path = config.TABLE_DISK_PATH.strip()
+        if not token or not disk_path:
+            return
+        auth_headers = {"Authorization": f"OAuth {token}"}
+        api_url = (
+            "https://cloud-api.yandex.net/v1/disk/resources?"
+            + urllib.parse.urlencode(
+                {
+                    "path": disk_path,
+                    "fields": "name,size,md5,modified",
+                }
+            )
+        )
+        try:
+            data = self._fetch_json(api_url, auth_headers)
+        except Exception as exc:
+            logger.warning("Yandex Disk: не удалось получить метаданные path=%s: %s", disk_path, exc)
+            return
+        logger.info(
+            "Yandex Disk файл %s: size=%s md5=%s modified=%s",
+            disk_path,
+            data.get("size"),
+            data.get("md5"),
+            data.get("modified"),
+        )
+
+    def _yandex_disk_oauth_load_bytes(self) -> bytes:
+        self._log_yandex_disk_resource_meta()
+        raw = self._download_yandex_disk_oauth_bytes()
+        logger.info(
+            "Скачанные байты с Диска: len=%s sha256=%s",
+            len(raw),
+            hashlib.sha256(raw).hexdigest()[:16],
+        )
+        return raw
+
     def _download_yandex_disk_oauth_bytes(self) -> bytes:
         token = config.YANDEX_DISK_TOKEN.strip()
         disk_path = config.TABLE_DISK_PATH.strip()
@@ -304,7 +345,12 @@ class TableClient:
         download_url = normalize_cell(payload.get("href", ""))
         if not download_url:
             raise ValueError("Yandex Disk OAuth download URL is missing")
-        return self._download_bytes(download_url, auth_headers)
+        # Уникальный заголовок на каждый GET по CDN — снижает шанс ответа со старого edge-кэша.
+        download_headers = {
+            **auth_headers,
+            "X-Request-Id": str(uuid.uuid4()),
+        }
+        return self._download_bytes(download_url, download_headers)
 
     def _fetch_json(self, url: str, extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
         merged = dict(extra_headers or {})
